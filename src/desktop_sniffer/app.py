@@ -63,10 +63,10 @@ class SplashOverlay(QWidget):
         p.fillRect(self.rect(), QColor("white"))
 
         # Title
-        title_font = QFont("Segoe UI", 22, QFont.Weight.Bold)
+        title_font = QFont("Segoe UI", 24, QFont.Weight.Bold)
         p.setFont(title_font)
         p.setPen(QColor("#0284c7"))
-        p.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "Desktop Sniffer")
+        p.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "Snare")
 
         # Subtitle with dots animation
         sub_font = QFont("Segoe UI", 11)
@@ -110,7 +110,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("Desktop Sniffer")
+        self.setWindowTitle("Snare - HTTP Sniffer & Mock")
         self.resize(1500, 950)
 
         self.workspaces = WorkspaceService(workspaces_dir())

@@ -1,8 +1,8 @@
-# Desktop Sniffer 🚀
+# Snare 🚀
 
 > **O‘zbekistonlik QA muhandislari, backend va mobil dasturchilar uchun qulay, vizual HTTP/HTTPS tarmoq tahlilchisi va API Mock vositasi.**
 
-Desktop Sniffer — bu **PySide6 (Qt)** va **mitmproxy** dvigateli asosida yaratilgan zamonaviy desktop ilovadir. U brauzerlar, kompyuter dasturlari hamda mobil ilovalar (iOS / Android) trafigini real vaqt rejimida ushlab qolish, tahlil qilish va eng muhimi — server javoblarini vizual tarzda **Mock (o‘zgartirish)** qilish imkonini beradi.
+Snare — bu **PySide6 (Qt)** va **mitmproxy** dvigateli asosida yaratilgan zamonaviy desktop ilovadir. U brauzerlar, kompyuter dasturlari hamda mobil ilovalar (iOS / Android) trafigini real vaqt rejimida ushlab qolish, tahlil qilish va eng muhimi — server javoblarini vizual tarzda **Mock (o‘zgartirish)** qilish imkonini beradi.
 
 ---
 
@@ -48,8 +48,8 @@ Ushbu loyiha zamonaviy dasturlash yondashuvlaridan foydalangan holda, **Antigrav
 
 ### 1. Repozitoriyni yuklab oling:
 ```bash
-git clone https://github.com/SIZNING_PROFILINGIZ/desktop-sniffer.git
-cd desktop-sniffer
+git clone https://github.com/IamSodikov/snare.git
+cd snare
 ```
 
 ### 2. Virtual muhit (venv) yarating va faollashtiring:
@@ -71,9 +71,9 @@ pip install -e .
 
 ### 4. Dasturni ishga tushiring:
 ```powershell
+snare
+# yoki
 python -m desktop_sniffer
-# yoki terminaldan to'g'ridan-to'g'ri:
-desktop-sniffer
 ```
 
 ---
