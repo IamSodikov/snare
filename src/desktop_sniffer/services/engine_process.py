@@ -57,10 +57,15 @@ class EngineProcess(QObject):
         name = "mitmdump.exe" if sys.platform == "win32" else "mitmdump"
 
         if getattr(sys, 'frozen', False):
-            meipass = Path(sys._MEIPASS)
-            bundled = meipass / name
-            if bundled.exists():
-                return str(bundled)
+            if hasattr(sys, '_MEIPASS'):
+                bundled = Path(sys._MEIPASS) / name
+                if bundled.exists():
+                    return str(bundled)
+            
+            # fallback for --onedir builds where sys.executable is in the same folder
+            local_bundle = Path(sys.executable).resolve().parent / name
+            if local_bundle.exists():
+                return str(local_bundle)
 
         local = Path(sys.executable).resolve().parent / name
 

@@ -65,8 +65,7 @@ jobs:
             --name Snare \
             --icon "src/desktop_sniffer/assets/icon.ico" \
             --add-binary "mitmdump${{ matrix.executable_ext }}:." \
-            --add-data "src/desktop_sniffer/assets/*:desktop_sniffer/assets" \
-            --add-data "src/desktop_sniffer/infrastructure/mitmproxy/addon_entry.py:desktop_sniffer/infrastructure/mitmproxy" \
+            --add-data "src/desktop_sniffer:desktop_sniffer" \
             src/desktop_sniffer/app.py
 
       - name: Package for Windows
