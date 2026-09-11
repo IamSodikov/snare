@@ -66,6 +66,18 @@ class EngineProcess(QObject):
             local_bundle = Path(sys.executable).resolve().parent / name
             if local_bundle.exists():
                 return str(local_bundle)
+                
+            # fallback for macOS .app bundles where mitmproxy might be an embedded .app
+            if sys.platform == "darwin":
+                # Check next to executable
+                macos_app_bundle = Path(sys.executable).resolve().parent / "mitmproxy.app" / "Contents" / "MacOS" / "mitmdump"
+                if macos_app_bundle.exists():
+                    return str(macos_app_bundle)
+                
+                # Check in Resources directory
+                macos_app_bundle_res = Path(sys.executable).resolve().parent.parent / "Resources" / "mitmproxy.app" / "Contents" / "MacOS" / "mitmdump"
+                if macos_app_bundle_res.exists():
+                    return str(macos_app_bundle_res)
 
         local = Path(sys.executable).resolve().parent / name
 

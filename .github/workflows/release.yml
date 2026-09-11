@@ -53,20 +53,33 @@ jobs:
           if [ "${{ matrix.os }}" == "windows-latest" ]; then
             curl -L -o mitmproxy.zip "https://downloads.mitmproxy.org/12.2.3/mitmproxy-12.2.3-windows-x86_64.zip"
             unzip mitmproxy.zip mitmdump.exe
+          elif [ "${{ matrix.os }}" == "macos-latest" ]; then
+            curl -L -o mitmproxy.tar.gz "https://downloads.mitmproxy.org/12.2.3/mitmproxy-12.2.3-macos-x86_64.tar.gz"
+            tar -xzf mitmproxy.tar.gz
+            # It extracts mitmproxy.app
           else
-            curl -L -o mitmproxy.tar.gz "https://downloads.mitmproxy.org/12.2.3/mitmproxy-12.2.3-${{ matrix.mitm_os }}-x86_64.tar.gz"
+            curl -L -o mitmproxy.tar.gz "https://downloads.mitmproxy.org/12.2.3/mitmproxy-12.2.3-linux-x86_64.tar.gz"
             tar -xzf mitmproxy.tar.gz mitmdump
           fi
 
       - name: Build with PyInstaller
         shell: bash
         run: |
-          pyinstaller --noconfirm --onedir --windowed \
-            --name Snare \
-            --icon "src/desktop_sniffer/assets/icon.ico" \
-            --add-binary "mitmdump${{ matrix.executable_ext }}:." \
-            --add-data "src/desktop_sniffer:desktop_sniffer" \
-            src/desktop_sniffer/app.py
+          if [ "${{ matrix.os }}" == "macos-latest" ]; then
+            pyinstaller --noconfirm --onedir --windowed \
+              --name Snare \
+              --icon "src/desktop_sniffer/assets/icon.ico" \
+              --add-data "mitmproxy.app:mitmproxy.app" \
+              --add-data "src/desktop_sniffer:desktop_sniffer" \
+              src/desktop_sniffer/app.py
+          else
+            pyinstaller --noconfirm --onedir --windowed \
+              --name Snare \
+              --icon "src/desktop_sniffer/assets/icon.ico" \
+              --add-binary "mitmdump${{ matrix.executable_ext }}:." \
+              --add-data "src/desktop_sniffer:desktop_sniffer" \
+              src/desktop_sniffer/app.py
+          fi
 
       - name: Package for Windows
         if: matrix.os == 'windows-latest'
