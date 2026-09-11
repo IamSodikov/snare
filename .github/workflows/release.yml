@@ -51,7 +51,7 @@ jobs:
         shell: bash
         run: |
           if [ "${{ matrix.os }}" == "windows-latest" ]; then
-            curl -L -o mitmproxy.zip "https://downloads.mitmproxy.org/12.2.3/mitmproxy-12.2.3-windows-x64-executable.zip"
+            curl -L -o mitmproxy.zip "https://downloads.mitmproxy.org/12.2.3/mitmproxy-12.2.3-windows-x86_64.zip"
             unzip mitmproxy.zip mitmdump.exe
           else
             curl -L -o mitmproxy.tar.gz "https://downloads.mitmproxy.org/12.2.3/mitmproxy-12.2.3-${{ matrix.mitm_os }}-x86_64.tar.gz"
