@@ -111,8 +111,8 @@ jobs:
         with:
           name: ${{ matrix.artifact_name }}
           path: |
-            *.zip
-            *.tar.gz
+            Snare-*.zip
+            Snare-*.tar.gz
             *.deb
 
   release:
