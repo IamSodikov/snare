@@ -1,32 +1,42 @@
-# Contributing to Desktop Sniffer
+# Loyihaga Hissa Qo‘shish (Contributing Guide)
 
-Thank you for your interest in contributing to Desktop Sniffer! 
+Desktop Sniffer loyihasiga qiziqish bildirganingiz uchun tashakkur! Ushbu loyiha O‘zbekistonlik QA muhandislari va dasturchilarining kundalik ishini osonlashtirish maqsadida ochiq manbali qilib yaratilgan.
 
-## Code of Conduct
-Please be respectful, collaborative, and considerate of others in discussions and pull requests.
+---
 
-## How Can I Contribute?
+## 💡 Qanday qilib hissa qo‘shish mumkin?
 
-### Reporting Bugs
-- Use the GitHub issue tracker.
-- Describe the bug clearly, including:
-  - Your OS version (Windows / macOS / Linux)
-  - Python version
-  - Exact steps to reproduce the issue
-  - Relevant logs from the **Engine Logs** tab
+### 1. Xatoliklar haqida xabar berish (Bug Reports)
+Agar dasturda biror xatolik yoki kutilmagan to‘xtash yuz bersa, GitHub'dagi **Issues** bo‘limida yangi masala oching va quyidagilarni ilova qiling:
+- Operatsion tizimingiz va versiyasi (Windows 10/11, macOS, Linux).
+- Python versiyasi (`python --version`).
+- Xatoni takrorlash bo‘yicha ketma-ket qadamlar.
+- Ilovaning **Engine Logs** bo‘limidagi tegishli log yozuvlari.
 
-### Suggesting Enhancements
-- Open a feature request issue.
-- Explain why the enhancement would be useful and how it should behave.
+### 2. Yangi imkoniyatlar taklif qilish (Feature Requests)
+Agar dasturda qandaydir yangi qulaylik yoki funksiya bo‘lishini xohlasangiz, **Issues** bo‘limida taklif qoldiring va u nima uchun foydali bo‘lishini tushuntiring.
 
-### Pull Requests
-1. Fork the repo and create your branch from `main`.
-2. Ensure existing tests pass:
+### 3. Kod orqali hissa qo‘shish (Pull Requests)
+1. Repozitoriyni o‘z profilingizga **Fork** qiling.
+2. Yangi tarmoq (branch) oching:
+   ```bash
+   git checkout -b feature/YangiQulaylik
+   ```
+3. O‘zgarishlarni kiriting va mavjud testlar muvaffaqiyatli o‘tayotganini tekshiring:
    ```bash
    pytest
    ```
-3. Follow PEP 8 style standards with Ruff:
+4. Kod sifatini Ruff yordamida tekshiring:
    ```bash
    ruff check .
    ```
-4. Write clear commit messages and describe your changes in the PR description.
+5. O‘zgarishlarni commit qilib, o‘z repozitoriyingizga push qiling:
+   ```bash
+   git commit -m "feat: Yangi qulaylik qo'shildi"
+   git push origin feature/YangiQulaylik
+   ```
+6. Asosiy repozitoriyga **Pull Request (PR)** yuboring.
+
+---
+
+Har qanday yordam va takliflar uchun oldindan minnatdorchilik bildiramiz! 🤝

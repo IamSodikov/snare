@@ -1,124 +1,117 @@
 # Desktop Sniffer 🚀
 
-> **Cross-platform desktop HTTP/HTTPS sniffer and API mock debugger powered by PySide6 (Qt) and mitmproxy.**
+> **O‘zbekistonlik QA muhandislari, backend va mobil dasturchilar uchun qulay, vizual HTTP/HTTPS tarmoq tahlilchisi va API Mock vositasi.**
 
-Desktop Sniffer is a modern, developer-friendly graphical network inspector designed for intercepting, analyzing, and mocking HTTP/HTTPS traffic from desktop applications, browsers, and mobile devices (iOS / Android).
-
----
-
-## ✨ Features
-
-- 🌐 **Live Traffic Inspection**: Real-time packet capture, HTTP request/response headers, status codes, query parameters, and formatted JSON bodies.
-- 🎭 **Visual Mock Rules**:
-  - **Local Mock**: Return simulated responses immediately without contacting the upstream server.
-  - **Response Patch**: Intercept server responses and modify only specific fields, headers, or status codes.
-  - **Request Patch**: Intercept outgoing requests from clients and modify payloads/headers before reaching the server.
-  - **Replace**: Completely swap the server response with a custom response or binary fixture.
-- 📱 **Mobile & LAN Sniffing**: One-click LAN exposure (`0.0.0.0`) to inspect traffic from smartphones on the same Wi-Fi network with built-in CA certificate instructions (`http://mitm.it`).
-- ⚡ **Windows System Proxy Toggle**: Seamless integration with Windows network proxy settings with auto-cleanup on exit.
-- 🧠 **Advanced Matching & Scenarios**:
-  - URL prefix, exact, and regex matching.
-  - AND-condition filters (ideal for JSON-RPC methods on a single endpoint like `/rpc`).
-  - Stateful mock scenarios (e.g., return `500 Server Error` on first hit, `200 Success` on retry).
-  - Max hits limits and artificial network delay simulation.
-- 🎨 **Modern Qt UI**: Syntax-highlighted JSON viewer, inline editable header tables, one-click clipboard copying, and non-blocking asynchronous architecture.
+Desktop Sniffer — bu **PySide6 (Qt)** va **mitmproxy** dvigateli asosida yaratilgan zamonaviy desktop ilovadir. U brauzerlar, kompyuter dasturlari hamda mobil ilovalar (iOS / Android) trafigini real vaqt rejimida ushlab qolish, tahlil qilish va eng muhimi — server javoblarini vizual tarzda **Mock (o‘zgartirish)** qilish imkonini beradi.
 
 ---
 
-## 📦 Installation & Quick Start
+## 🤖 AI Hamkorligida Yaratilgan (Built with AI)
 
-### Requirements
-- Python `>= 3.12`
-- Windows 10/11, macOS, or Linux
+Ushbu loyiha zamonaviy dasturlash yondashuvlaridan foydalangan holda, **Antigravity (Google DeepMind)** sun'iy intellekt agenti va inson muhandisligining uzviy hamkorligida ishlab chiqildi. Arxitektura, asinxron jarayonlarni boshqarish, xavfsizlik filtrlari va qulay foydalanuvchi interfeysi (UI) AI ko‘magida bosqichma-bosqich optimallashtirilgan.
 
-### 1. Clone the repository
+---
+
+## ✨ Asosiy Imkoniyatlar
+
+- 🌐 **Jonli Trafikni Kuzatish (Live Inspection):**
+  - Barcha HTTP/HTTPS so‘rov va javoblarini real vaqtda ko‘rish.
+  - Sarlavhalar (Headers), holat kodlari (Status), URL parametrlari va formatlangan JSON tana qismlari (Body).
+  - Qulay JSON sintaksis bo‘yash (Highlighter) va bir bosishda nusxalash (Clipboard).
+
+- 🎭 **Vizual Mock Qoidalar (Visual Mock Rules):**
+  - **Local (Mahalliy javob):** Haqiqiy serverga bormasdan, dasturning o‘zidan istalgan status va JSON javob qaytarish.
+  - **Patch (Server javobini o‘zgartirish):** Haqiqiy serverdan qaytgan ma'lumotning faqat ma'lum bir qismini (masalan, foydalanuvchi balansi yoki statusini) o‘zgartirib telefonga uzatish.
+  - **Request Patch:** Telefon yoki brauzerdan serverga ketayotgan so‘rovni yo‘lda o‘zgartirish.
+  - **Replace (To‘liq almashtirish):** Server javobini bekor qilib, o‘rniga yangi matn yoki fayl (Binary Fixture) qaytarish.
+
+- 📱 **Mobil Qurilmalarni Ulash (Telefon / LAN):**
+  - Bitta Wi-Fi tarmog‘idagi telefonlar trafigini ko‘rish uchun proksini bir bosishda butun tarmoqqa ochish (`0.0.0.0`).
+  - Dastur ichida o‘rnatilgan qulay qo‘llanma va SSL sertifikatini (`http://mitm.it`) o‘rnatish ko‘rsatmalari.
+
+- ⚡ **Windows Tizim Proksisi (System Proxy):**
+  - Windows sozlamalaridagi proksini bir tugma bilan yoqish va o‘chirish.
+  - Ilova yopilganda tizim sozlamalarini avtomatik ravishda asl holiga xavfsiz qaytarish (internet uzilib qolmaydi).
+
+- 🧠 **Kengaytirilgan Shartlar va Ssenariylar:**
+  - Bir xil endpointga ega so‘rovlar (masalan `/rpc`) uchun Request Body ichidagi parametrlar bo‘yicha aniq filtrlash.
+  - Ssenariylar (Stateful Mocking): birinchi urinishda `500 Server Error`, ikkinchisida `200 Success` qaytarish (Retry logikasini test qilish uchun).
+  - Sun'iy tarmoq kechikishi (Network Delay ms) va maksimal ishlash soni (Max hits).
+
+---
+
+## 📦 O‘rnatish va Ishga Tushirish
+
+### Talablar:
+- **Python:** `>= 3.12`
+- **Operatsion tizim:** Windows 10/11, macOS yoki Linux
+
+### 1. Repozitoriyni yuklab oling:
 ```bash
-git clone https://github.com/your-username/desktop-sniffer.git
+git clone https://github.com/SIZNING_PROFILINGIZ/desktop-sniffer.git
 cd desktop-sniffer
 ```
 
-### 2. Set up virtual environment
-```bash
+### 2. Virtual muhit (venv) yarating va faollashtiring:
+```powershell
+# Virtual muhit yaratish
 python -m venv venv
 
 # Windows (PowerShell):
 .\venv\Scripts\Activate.ps1
 
-# Linux / macOS:
+# Linux yoki macOS:
 source venv/bin/activate
 ```
 
-### 3. Install dependencies
+### 3. Kutubxonalarni o‘rnating:
 ```bash
 pip install -e .
 ```
 
-### 4. Run the application
-```bash
+### 4. Dasturni ishga tushiring:
+```powershell
 python -m desktop_sniffer
-# or simply:
+# yoki terminaldan to'g'ridan-to'g'ri:
 desktop-sniffer
 ```
 
 ---
 
-## 🔒 Security & Privacy
+## 📱 Mobil Telefonni Ulash Bo‘yicha Qisqa Qo‘llanma
 
-When distributing or running this application:
-
-1. **Root CA Certificates:**
-   `mitmproxy` generates a unique local Certificate Authority (`~/.mitmproxy/mitmproxy-ca-cert.cer` and `mitmproxy-ca-cert.p12`) on your machine.
-   > ⚠️ **NEVER commit or share your `mitmproxy-ca-key.pem` private key!** It is automatically excluded in `.gitignore`.
-
-2. **Workspaces & Local Storage:**
-   All captured flows, fixtures, and rules are saved locally in your user's AppData directory:
-   - **Windows:** `%APPDATA%\LocalTools\DesktopSniffer\workspaces\`
-   - **Linux / macOS:** `~/.local/share/DesktopSniffer/workspaces/`
-   No personal data, authentication tokens, or capture databases are ever placed in the repository root.
-
-3. **Auto-Cleanup:**
-   The application intercepts window close events and restores your Windows System Proxy settings to prevent broken internet connections when shutting down.
+1. Ilova yuqorisidagi **"Telefon / LAN"** sozlamasini yoqing.
+2. Tepadagi **"Mobile Setup"** tugmasini bosing va ko‘rsatilgan kompyuteringiz IP manzili va portini eslab qoling.
+3. Telefoningizni kompyuter bilan **aynan bir xil Wi-Fi tarmog‘iga** ulang.
+4. Telefoningizning Wi-Fi sozlamalariga kirib, proksi parametrlariga o‘sha IP va portni kiriting.
+5. Telefon brauzeridan **`http://mitm.it`** saytiga kirib, o‘z tizimingizga mos (Android yoki iOS) sertifikatni yuklab oling va o‘rnating:
+   * *iOS qurilmalarida:* Sozlamalar ➡️ Asosiy ➡️ Qurilma haqida ➡️ Sertifikatlarga ishonch sozlamalari bo‘limidan mitmproxy sertifikatini yoqib qo‘ying.
+   * *Android qurilmalarida:* Xavfsizlik ➡️ CA sertifikatini o‘rnatish bo‘limidan yuklangan faylni tanlang.
 
 ---
 
-## ⚖️ Third-Party Licenses & Compliance
+## 🔒 Xavfsizlik va Maxfiylik
 
-This project is open-source under the **MIT License**. It leverages the following foundational libraries:
-
-| Library | License | Usage / Compliance Notes |
-|---|---|---|
-| **mitmproxy** | [MIT License](https://github.com/mitmproxy/mitmproxy/blob/main/LICENSE) | Permissive open-source proxy engine used as a background worker. |
-| **PySide6 (Qt)** | [LGPLv3](https://www.gnu.org/licenses/lgpl-3.0.html) | Used via dynamic linking (`import PySide6`). Under LGPLv3, user applications importing PySide6 can remain under MIT / Apache 2.0 without making your proprietary code LGPL. |
-| **cryptography** | Apache 2.0 / BSD | Used for TLS certificate handling. |
+Ushbu dastur xavfsizlik standartlariga to‘liq javob beradi:
+1. **Shaxsiy kalitlar (Private Keys):** `mitmproxy` generatsiya qilgan ildiz sertifikati kalitlari repozitoriyga kirmasligi uchun `.gitignore` orqali to‘liq himoyalangan.
+2. **Ushlangan trafiklar (Tokens, Parollar, Ma'lumotlar):** Test jarayonida yozib olingan barcha ma'lumotlar loyiha papkasida emas, balki foydalanuvchining shaxsiy tizim papkasida saqlanadi (`%APPDATA%\LocalTools\DesktopSniffer\workspaces\`). Git orqali hech qanday shaxsiy trafik tashqariga chiqib ketmaydi.
+3. **Avtomatik tozalash:** Dastur yopilayotganda barcha jarayonlar xavfsiz to‘xtatiladi va Windows proksi sozlamalari zudlik bilan tiklanadi.
 
 ---
 
-## 🛠️ Development & Testing
+## ⚖️ Litsenziya
 
-Run unit tests with pytest:
-```bash
-pytest
-```
+Ushbu loyiha **[MIT License](LICENSE)** asosida ochiq manbali qilib tarqatiladi.
 
-Format and lint with Ruff:
-```bash
-ruff check .
-ruff format .
-```
+Qo‘llanilgan asosiy vositalar litsenziyalari:
+* **mitmproxy** — [MIT License](https://github.com/mitmproxy/mitmproxy/blob/main/LICENSE)
+* **PySide6 (Qt)** — [LGPLv3](https://www.gnu.org/licenses/lgpl-3.0.html) (Dinamik import qilingani sababli loyihaning MIT litsenziyasiga to‘liq mos keladi).
 
 ---
 
-## 🤝 Contributing
+## 🤝 Hamjamiyat va Hissa Qo‘shish (Contributing)
 
-Contributions, issues, and feature requests are welcome!
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+Loyiha bo‘yicha yangi takliflar, xatoliklar haqidagi xabarlar yoki pull request'lar doimo kutib olinadi!
+Batafsil ma'lumot olish uchun **[CONTRIBUTING.md](CONTRIBUTING.md)** fayli bilan tanishib chiqing.
 
----
-
-## 📄 License
-
-Distributed under the **MIT License**. See `LICENSE` for more information.
+Dastur O‘zbekiston IT hamjamiyatiga foydali bo‘ladi degan umiddamiz! 🇺🇿
