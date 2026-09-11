@@ -1,6 +1,6 @@
 # Snare 🚀
 
-> **O‘zbekistonlik QA muhandislari, backend va mobil dasturchilar uchun qulay, vizual HTTP/HTTPS tarmoq tahlilchisi va API Mock vositasi.**
+> **QA muhandislari, backend va mobil dasturchilar uchun qulay, vizual HTTP/HTTPS tarmoq tahlilchisi va API Mock vositasi.**
 
 Snare — bu **PySide6 (Qt)** va **mitmproxy** dvigateli asosida yaratilgan zamonaviy desktop ilovadir. U brauzerlar, kompyuter dasturlari hamda mobil ilovalar (iOS / Android) trafigini real vaqt rejimida ushlab qolish, tahlil qilish va eng muhimi — server javoblarini vizual tarzda **Mock (o‘zgartirish)** qilish imkonini beradi.
 
