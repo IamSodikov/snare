@@ -54,31 +54,10 @@ class EngineProcess(QObject):
 
     @staticmethod
     def find_executable():
-        name = "mitmdump.exe" if sys.platform == "win32" else "mitmdump"
-
         if getattr(sys, 'frozen', False):
-            if hasattr(sys, '_MEIPASS'):
-                bundled = Path(sys._MEIPASS) / name
-                if bundled.exists():
-                    return str(bundled)
-            
-            # fallback for --onedir builds where sys.executable is in the same folder
-            local_bundle = Path(sys.executable).resolve().parent / name
-            if local_bundle.exists():
-                return str(local_bundle)
-                
-            # fallback for macOS .app bundles where mitmproxy might be an embedded .app
-            if sys.platform == "darwin":
-                # Check next to executable
-                macos_app_bundle = Path(sys.executable).resolve().parent / "mitmproxy.app" / "Contents" / "MacOS" / "mitmdump"
-                if macos_app_bundle.exists():
-                    return str(macos_app_bundle)
-                
-                # Check in Resources directory
-                macos_app_bundle_res = Path(sys.executable).resolve().parent.parent / "Resources" / "mitmproxy.app" / "Contents" / "MacOS" / "mitmdump"
-                if macos_app_bundle_res.exists():
-                    return str(macos_app_bundle_res)
+            return sys.executable
 
+        name = "mitmdump.exe" if sys.platform == "win32" else "mitmdump"
         local = Path(sys.executable).resolve().parent / name
 
         if local.exists():
@@ -141,11 +120,17 @@ class EngineProcess(QObject):
 
         self.status_changed.emit("Engine ishga tushirilmoqda…")
 
-        self._process.start(executable, [
+        args = []
+        if getattr(sys, 'frozen', False):
+            args.append("--mitmdump-internal")
+
+        args.extend([
             "--listen-host", listen_host,
             "--listen-port", str(proxy_port),
             "-s", str(addon_entry),
         ])
+
+        self._process.start(executable, args)
 
         self._poll.start()
 
