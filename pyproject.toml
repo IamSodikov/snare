@@ -45,6 +45,9 @@ desktop-sniffer = "desktop_sniffer.app:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+desktop_sniffer = ["assets/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]

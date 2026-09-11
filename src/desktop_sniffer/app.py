@@ -1,7 +1,8 @@
 import sys
+from pathlib import Path
 
 from PySide6.QtCore import QTimer, QUrl, Qt, QPropertyAnimation, QEasingCurve, QSettings
-from PySide6.QtGui import QDesktopServices, QPainter, QColor, QFont
+from PySide6.QtGui import QDesktopServices, QPainter, QColor, QFont, QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -111,6 +112,11 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self.setWindowTitle("Snare - HTTP Sniffer & Mock")
+        
+        icon_path = str(Path(__file__).parent / "assets" / "icon.png")
+        self.setWindowIcon(QIcon(icon_path))
+        QApplication.setWindowIcon(QIcon(icon_path))
+        
         self.resize(1500, 950)
 
         self.workspaces = WorkspaceService(workspaces_dir())
@@ -448,6 +454,13 @@ class MainWindow(QMainWindow):
 
 def main() -> int:
     """Create and run the desktop application."""
+    import ctypes
+    try:
+        myappid = 'iamsodikov.snare.desktopsniffer.1.0'
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+    except Exception:
+        pass
+        
     application = QApplication.instance() or QApplication(sys.argv)
     window = MainWindow()
     window.show()

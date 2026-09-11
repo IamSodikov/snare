@@ -1,0 +1,125 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            artifact_name: Snare-Windows
+            mitm_os: windows
+            mitm_ext: zip
+            executable_ext: .exe
+          - os: ubuntu-latest
+            artifact_name: Snare-Linux
+            mitm_os: linux
+            mitm_ext: tar.gz
+            executable_ext: ""
+          - os: macos-latest
+            artifact_name: Snare-MacOS
+            mitm_os: macos
+            mitm_ext: tar.gz
+            executable_ext: ""
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install .[dev]
+
+      - name: Download mitmdump
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" == "windows-latest" ]; then
+            curl -L -o mitmproxy.zip "https://downloads.mitmproxy.org/12.2.3/mitmproxy-12.2.3-windows-x64-executable.zip"
+            unzip mitmproxy.zip mitmdump.exe
+          else
+            curl -L -o mitmproxy.tar.gz "https://downloads.mitmproxy.org/12.2.3/mitmproxy-12.2.3-${{ matrix.mitm_os }}-x86_64.tar.gz"
+            tar -xzf mitmproxy.tar.gz mitmdump
+          fi
+
+      - name: Build with PyInstaller
+        shell: bash
+        run: |
+          pyinstaller --noconfirm --onedir --windowed \
+            --name Snare \
+            --icon "src/desktop_sniffer/assets/icon.ico" \
+            --add-binary "mitmdump${{ matrix.executable_ext }}:." \
+            --add-data "src/desktop_sniffer/assets/*:desktop_sniffer/assets" \
+            --add-data "src/desktop_sniffer/infrastructure/mitmproxy/addon_entry.py:desktop_sniffer/infrastructure/mitmproxy" \
+            src/desktop_sniffer/app.py
+
+      - name: Package for Windows
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          cd dist
+          mv Snare Snare-Windows
+          7z a ../Snare-Windows.zip Snare-Windows
+
+      - name: Package for Linux
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          cd dist
+          tar -czf ../Snare-Linux.tar.gz Snare
+          sudo gem install fpm
+          fpm -s dir -t deb -n snare -v 1.0.0 -a amd64 --prefix /opt/snare -C Snare .
+          mv *.deb ../
+
+      - name: Package for MacOS
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: |
+          cd dist
+          zip -ry ../Snare-MacOS.zip Snare.app
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            *.zip
+            *.tar.gz
+            *.deb
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/**/*.zip
+            artifacts/**/*.tar.gz
+            artifacts/**/*.deb
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

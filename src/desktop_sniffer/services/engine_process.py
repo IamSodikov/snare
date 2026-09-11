@@ -56,6 +56,12 @@ class EngineProcess(QObject):
     def find_executable():
         name = "mitmdump.exe" if sys.platform == "win32" else "mitmdump"
 
+        if getattr(sys, 'frozen', False):
+            meipass = Path(sys._MEIPASS)
+            bundled = meipass / name
+            if bundled.exists():
+                return str(bundled)
+
         local = Path(sys.executable).resolve().parent / name
 
         if local.exists():
