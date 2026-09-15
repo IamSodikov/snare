@@ -154,6 +154,9 @@ class MainWindow(QMainWindow):
         self.updater.check_for_updates()
 
     def prompt_update(self, version, url, release_notes):
+        if not release_notes or not release_notes.strip():
+            release_notes = "• Ilova yanada optimallashtirildi va yangi qulayliklar qo'shildi.\n• Xatoliklar tuzatildi va barqarorlik oshirildi."
+            
         reply = QMessageBox.question(
             self,
             "Yangi versiya mavjud!",
