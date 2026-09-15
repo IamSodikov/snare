@@ -6,6 +6,7 @@ import sys
 import threading
 import urllib.request
 import zipfile
+import ssl
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QThread, Signal
@@ -13,6 +14,12 @@ from PySide6.QtCore import QObject, QThread, Signal
 from desktop_sniffer import __version__
 
 GITHUB_REPO = "IamSodikov/snare"
+
+def get_ssl_context():
+    try:
+        return ssl.create_default_context()
+    except Exception:
+        return ssl._create_unverified_context()
 
 class Updater(QObject):
     update_available = Signal(str, str, str)  # version, url, release_notes
@@ -26,7 +33,16 @@ class Updater(QObject):
             try:
                 url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
                 req = urllib.request.Request(url, headers={"User-Agent": "Snare-Updater"})
-                with urllib.request.urlopen(req, timeout=5) as response:
+                
+                # SSL xatolarining oldini olish uchun
+                ctx = get_ssl_context()
+                try:
+                    resp = urllib.request.urlopen(req, timeout=5, context=ctx)
+                except Exception:
+                    ctx = ssl._create_unverified_context()
+                    resp = urllib.request.urlopen(req, timeout=5, context=ctx)
+                
+                with resp as response:
                     data = json.loads(response.read().decode())
 
                 latest_version = data.get("tag_name", "")
@@ -73,7 +89,15 @@ class DownloadThread(QThread):
                 filename = temp_dir / "Snare-update"
 
             req = urllib.request.Request(self.url, headers={"User-Agent": "Snare-Updater"})
-            with urllib.request.urlopen(req, timeout=10) as response, open(filename, "wb") as f:
+            
+            ctx = get_ssl_context()
+            try:
+                resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+            except Exception:
+                ctx = ssl._create_unverified_context()
+                resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+
+            with resp as response, open(filename, "wb") as f:
                 total_size = int(response.info().get("Content-Length", 0))
                 downloaded = 0
                 chunk_size = 8192
