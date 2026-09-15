@@ -146,6 +146,14 @@ del "%~f0"
         env = os.environ.copy()
         env.pop("_MEIPASS2", None)
         env.pop("_MEIPASS", None)
+        
+        # PyInstaller prepends _MEIPASS to PATH, which causes LoadLibrary to search the deleted folder.
+        if getattr(sys, 'frozen', False):
+            meipass = sys._MEIPASS
+            paths = env.get("PATH", "").split(os.pathsep)
+            paths = [p for p in paths if p != meipass and p != meipass + os.sep]
+            env["PATH"] = os.pathsep.join(paths)
+
         subprocess.Popen(
             str(bat_path), shell=True, creationflags=subprocess.CREATE_NO_WINDOW, env=env
         )
@@ -178,6 +186,13 @@ rm "$0"
             env = os.environ.copy()
             env.pop("_MEIPASS2", None)
             env.pop("_MEIPASS", None)
+            if getattr(sys, 'frozen', False):
+                meipass = sys._MEIPASS
+                for env_var in ["PATH", "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH"]:
+                    if env_var in env:
+                        paths = env[env_var].split(os.pathsep)
+                        paths = [p for p in paths if p != meipass and p != meipass + os.sep]
+                        env[env_var] = os.pathsep.join(paths)
             subprocess.Popen([str(sh_path)], start_new_session=True, env=env)
             QApplication.quit()
     else:
@@ -198,5 +213,12 @@ rm "$0"
         env = os.environ.copy()
         env.pop("_MEIPASS2", None)
         env.pop("_MEIPASS", None)
+        if getattr(sys, 'frozen', False):
+            meipass = sys._MEIPASS
+            for env_var in ["PATH", "LD_LIBRARY_PATH"]:
+                if env_var in env:
+                    paths = env[env_var].split(os.pathsep)
+                    paths = [p for p in paths if p != meipass and p != meipass + os.sep]
+                    env[env_var] = os.pathsep.join(paths)
         subprocess.Popen([str(sh_path)], start_new_session=True, env=env)
         QApplication.quit()
