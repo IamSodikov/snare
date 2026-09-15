@@ -1,9 +1,11 @@
 import asyncio
+import json
 import os
 
 from mitmproxy import ctx, http
 
 from desktop_sniffer.domain.rules.engine import RuleEngine
+from desktop_sniffer.domain.rules.patching import apply_patch
 from desktop_sniffer.infrastructure.mitmproxy.capture_writer import CaptureWriter
 from desktop_sniffer.infrastructure.mitmproxy.snapshots import (
     header_pairs,
@@ -72,6 +74,14 @@ class DesktopAddon:
                     self.store.fixture,
                     rule["fixture"],
                 )
+            elif rule.get("body_patch") and patch and flow.response:
+                try:
+                    orig_body = flow.response.get_content(strict=False)
+                    orig_json = json.loads(orig_body)
+                    patched_json = apply_patch(orig_json, rule["body_patch"])
+                    body = json.dumps(patched_json).encode("utf-8")
+                except Exception:
+                    body = rule.get("body", "").encode("utf-8")
             else:
                 body = rule.get("body", "").encode("utf-8")
 
@@ -156,6 +166,14 @@ class DesktopAddon:
                     self.store.fixture,
                     rule["fixture"],
                 )
+            elif rule.get("body_patch"):
+                try:
+                    orig_body = flow.request.get_content(strict=False)
+                    orig_json = json.loads(orig_body)
+                    patched_json = apply_patch(orig_json, rule["body_patch"])
+                    body = json.dumps(patched_json).encode("utf-8")
+                except Exception:
+                    body = rule.get("body", "").encode("utf-8")
             else:
                 body = rule.get("body", "").encode("utf-8")
 

@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 )
 
 from desktop_sniffer.domain.rules.defaults import default_rule
+from desktop_sniffer.domain.rules.patching import deep_diff
 from desktop_sniffer.ui.helpers.widgets import button, text_item
 
 
@@ -613,6 +614,15 @@ class CapturesPage(QWidget):
         method_changed = self.req_method.text() != self.req_initial_method
         url_changed = self.req_url.text() != self.req_initial_url
         
+        body_patch = None
+        if body_changed:
+            try:
+                orig_json = json.loads(self.req_initial_body)
+                edited_json = json.loads(self.req_body.toPlainText())
+                body_patch = deep_diff(orig_json, edited_json)
+            except Exception:
+                pass
+        
         conditions = self.build_conditions(parsed, self.req_snapshot)
         rule = default_rule()
         rule.update({
@@ -625,6 +635,7 @@ class CapturesPage(QWidget):
             "headers": replacements,
             "remove_headers": removed,
             "body": self.req_body.toPlainText() if body_changed else "",
+            "body_patch": body_patch,
             "preserve_body": not body_changed,
             "rewrite_method": self.req_method.text() if method_changed else "",
             "rewrite_url": self.req_url.text() if url_changed else "",
@@ -650,6 +661,15 @@ class CapturesPage(QWidget):
         body_changed = self.res_body.toPlainText() != self.res_initial_body
         status_changed = self.res_status.value() != self.res_initial_status
         
+        body_patch = None
+        if body_changed:
+            try:
+                orig_json = json.loads(self.res_initial_body)
+                edited_json = json.loads(self.res_body.toPlainText())
+                body_patch = deep_diff(orig_json, edited_json)
+            except Exception:
+                pass
+        
         conditions = self.build_conditions(parsed, self.req_snapshot)
         rule = default_rule()
         rule.update({
@@ -662,6 +682,7 @@ class CapturesPage(QWidget):
             "headers": replacements,
             "remove_headers": removed,
             "body": self.res_body.toPlainText() if body_changed else "",
+            "body_patch": body_patch,
             "preserve_body": not body_changed,
             "conditions": conditions,
         })
