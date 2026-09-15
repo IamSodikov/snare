@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QMessageBox,
+    QProgressDialog,
     QPushButton,
     QSpinBox,
     QTabWidget,
@@ -23,6 +24,7 @@ from desktop_sniffer.core.constants import (
 )
 from desktop_sniffer.core.paths import workspaces_dir
 from desktop_sniffer.core.system_proxy import set_windows_proxy
+from desktop_sniffer.core.updater import Updater, DownloadThread, apply_update
 from desktop_sniffer.services.engine_process import EngineProcess
 from desktop_sniffer.services.workspace_service import WorkspaceService
 from desktop_sniffer.ui.dialogs.mobile_setup_dialog import MobileSetupDialog
@@ -145,8 +147,50 @@ class MainWindow(QMainWindow):
         self.engine.ready.connect(self._on_engine_ready)
 
         self.load_workspace(DEFAULT_WORKSPACE)
-
         QTimer.singleShot(100, self.restart_engine)
+        
+        self.updater = Updater()
+        self.updater.update_available.connect(self.prompt_update)
+        self.updater.check_for_updates()
+
+    def prompt_update(self, version, url, release_notes):
+        reply = QMessageBox.question(
+            self,
+            "Yangi versiya mavjud!",
+            f"Dasturning yangi {version} versiyasi chiqdi.\n\n"
+            f"Yangiliklar:\n{release_notes}\n\n"
+            "Hozir yuklab olib o'rnatishni xohlaysizmi?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self.start_download(url)
+
+    def start_download(self, url):
+        self.progress_dialog = QProgressDialog("Yangilanish yuklanmoqda...", "Bekor qilish", 0, 100, self)
+        self.progress_dialog.setWindowTitle("Yuklanmoqda")
+        self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+        self.progress_dialog.setAutoClose(True)
+        self.progress_dialog.setAutoReset(True)
+        
+        self.download_thread = DownloadThread(url)
+        self.download_thread.progress.connect(self.progress_dialog.setValue)
+        self.download_thread.finished.connect(self.on_download_finished)
+        self.download_thread.error.connect(lambda e: QMessageBox.warning(self, "Xatolik", f"Yuklashda xatolik: {e}"))
+        self.progress_dialog.canceled.connect(self.download_thread.terminate)
+        
+        self.download_thread.start()
+        self.progress_dialog.show()
+
+    def on_download_finished(self, filename):
+        self.progress_dialog.close()
+        reply = QMessageBox.question(
+            self,
+            "Yuklab olindi",
+            "Yangi versiya muvaffaqiyatli yuklab olindi!\nO'rnatish uchun dastur qayta ishga tushiriladi. Davom etamizmi?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            apply_update(filename)
 
     def _on_engine_ready(self, *_):
         pass
