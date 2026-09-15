@@ -28,13 +28,20 @@ class RuleEngine:
         for name, value in request.get("headers", []):
             request_headers.setdefault(name.lower(), []).append(value)
 
-        body_valid = True
+        body_parsed = False
+        body = None
+        body_valid = False
 
-        try:
-            body = json.loads(request.get("body", b""))
-        except (ValueError, UnicodeError, TypeError):
-            body = None
-            body_valid = False
+        def get_json_body():
+            nonlocal body_parsed, body, body_valid
+            if not body_parsed:
+                body_parsed = True
+                try:
+                    body = json.loads(request.get("body", b""))
+                    body_valid = True
+                except (ValueError, UnicodeError, TypeError):
+                    pass
+            return body, body_valid
 
         for rule in self.rules:
             if not rule.get("enabled", True):
@@ -80,7 +87,8 @@ class RuleEngine:
                 elif source == "header":
                     values = request_headers.get(key.lower(), [])
                 else:
-                    values = json_values(body, key) if body_valid else []
+                    b, b_valid = get_json_body()
+                    values = json_values(b, key) if b_valid else []
 
                 if not compare(
                     values,

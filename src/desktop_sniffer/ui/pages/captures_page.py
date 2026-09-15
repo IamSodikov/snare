@@ -2,7 +2,8 @@ import base64
 import json
 from urllib.parse import parse_qsl, urlsplit
 
-from PySide6.QtCore import QTimer, Qt, Signal
+from PySide6.QtCore import QRegularExpression, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QFont, QGuiApplication, QSyntaxHighlighter, QTextCharFormat
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QDialog,
@@ -16,18 +17,15 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSpinBox,
     QSplitter,
-    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from desktop_sniffer.domain.rules.defaults import default_rule
 from desktop_sniffer.ui.helpers.widgets import button, text_item
-
-from PySide6.QtGui import QSyntaxHighlighter, QTextCharFormat, QColor, QFont, QGuiApplication
-from PySide6.QtCore import QRegularExpression
 
 
 class HeaderHighlighter(QSyntaxHighlighter):
@@ -66,7 +64,7 @@ class EditorDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(title)
         self.resize(800, 600)
-        from PySide6.QtWidgets import QVBoxLayout, QHBoxLayout
+        from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout
         layout = QVBoxLayout(self)
         self.editor = QPlainTextEdit()
         
@@ -122,7 +120,6 @@ class HeadersTableWidget(QTableWidget):
     def setPlainText(self, text):
         self.blockSignals(True)
         self.setRowCount(0)
-        from PySide6.QtWidgets import QTableWidgetItem
         for line in text.splitlines():
             line = line.strip()
             if not line: continue
@@ -213,7 +210,10 @@ class CapturesPage(QWidget):
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         self.table.verticalHeader().setVisible(False)
         self.table.setAlternatingRowColors(True)
         self.table.itemSelectionChanged.connect(self.show_selected)

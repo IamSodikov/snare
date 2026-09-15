@@ -114,6 +114,36 @@ class Store:
         response = document.get("final")
         status = response["status"] if response else None
 
+        display_url = document["url"]
+        if "rpc" in display_url.lower() or "graphql" in display_url.lower():
+            req = document.get("request")
+            if req and req.get("body_b64"):
+                try:
+                    raw = base64.b64decode(req["body_b64"]).decode("utf-8")
+                    body = json.loads(raw)
+                    extracted = []
+                    if isinstance(body, dict):
+                        for key in ["method", "methods", "action", "operationName"]:
+                            if key in body:
+                                val = body[key]
+                                if isinstance(val, str):
+                                    extracted.append(val)
+                                elif isinstance(val, list) and all(isinstance(x, str) for x in val):
+                                    extracted.extend(val)
+                    elif isinstance(body, list):
+                        for item in body:
+                            if isinstance(item, dict):
+                                for key in ["method", "action"]:
+                                    if key in item and isinstance(item[key], str):
+                                        extracted.append(item[key])
+                    if extracted:
+                        joined = ", ".join(extracted)
+                        if len(joined) > 50:
+                            joined = joined[:47] + "..."
+                        display_url = f"{display_url} [{joined}]"
+                except Exception:
+                    pass
+
         with self.connect() as db:
             db.execute("""
                 INSERT OR REPLACE INTO captures
@@ -123,7 +153,7 @@ class Store:
                 document["id"],
                 document.get("created") or time.time(),
                 document["method"],
-                document["url"],
+                display_url,
                 status,
                 document.get("mock_action"),
                 json.dumps(document, ensure_ascii=False),

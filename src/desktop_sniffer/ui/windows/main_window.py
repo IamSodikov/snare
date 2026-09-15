@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from PySide6.QtCore import QTimer, QUrl, Qt, QSettings
+from PySide6.QtCore import QSettings, Qt, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices, QIcon
 from PySide6.QtWidgets import (
     QApplication,
@@ -22,14 +22,14 @@ from desktop_sniffer.core.constants import (
     DEFAULT_WORKSPACE,
 )
 from desktop_sniffer.core.paths import workspaces_dir
+from desktop_sniffer.core.system_proxy import set_windows_proxy
 from desktop_sniffer.services.engine_process import EngineProcess
 from desktop_sniffer.services.workspace_service import WorkspaceService
+from desktop_sniffer.ui.dialogs.mobile_setup_dialog import MobileSetupDialog
 from desktop_sniffer.ui.helpers.widgets import button
 from desktop_sniffer.ui.pages.captures_page import CapturesPage
 from desktop_sniffer.ui.pages.logs_page import LogsPage
 from desktop_sniffer.ui.pages.rules_page import RulesPage
-from desktop_sniffer.core.system_proxy import set_windows_proxy
-from desktop_sniffer.ui.dialogs.mobile_setup_dialog import MobileSetupDialog
 
 
 class MainWindow(QMainWindow):

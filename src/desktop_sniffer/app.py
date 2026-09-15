@@ -1,5 +1,5 @@
 import sys
-from PySide6.QtWidgets import QApplication
+
 
 def main() -> int:
     """Create and run the desktop application."""
@@ -9,6 +9,8 @@ def main() -> int:
         return mitmdump()
 
     import ctypes
+
+    from PySide6.QtWidgets import QApplication
     try:
         myappid = 'iamsodikov.snare.desktopsniffer.1.0'
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)

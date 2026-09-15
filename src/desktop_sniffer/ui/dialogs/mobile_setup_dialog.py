@@ -1,6 +1,8 @@
 import socket
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QDialogButtonBox
+
 from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QDialog, QDialogButtonBox, QLabel, QVBoxLayout
+
 
 def get_local_ip():
     try:

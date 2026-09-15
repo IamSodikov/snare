@@ -1,6 +1,5 @@
 import re
 
-
 ACTIONS = ("local", "replace", "patch", "request_patch")
 MATCH_MODES = ("exact", "prefix", "regex")
 OPERATORS = ("equals", "contains", "regex", "exists", "absent")

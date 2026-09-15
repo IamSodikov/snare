@@ -11,7 +11,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
-    QPushButton,
     QTableWidget,
     QVBoxLayout,
     QWidget,
@@ -43,7 +42,7 @@ class ToggleSwitch(QWidget):
         self.toggled.emit(self._checked)
     
     def paintEvent(self, event):
-        from PySide6.QtGui import QPainter, QColor
+        from PySide6.QtGui import QColor, QPainter
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         w, h = self.width(), self.height()

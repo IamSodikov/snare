@@ -8,5 +8,4 @@ if package_root not in sys.path:
 
 from desktop_sniffer.infrastructure.mitmproxy.addon import DesktopAddon
 
-
 addons = [DesktopAddon()]

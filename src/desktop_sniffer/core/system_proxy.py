@@ -1,12 +1,13 @@
 import sys
 
+
 def set_windows_proxy(enable: bool, host: str = "127.0.0.1", port: int = 8080):
     if sys.platform != "win32":
         return
 
     try:
-        import winreg
         import ctypes
+        import winreg
 
         internet_settings = winreg.OpenKey(
             winreg.HKEY_CURRENT_USER,
