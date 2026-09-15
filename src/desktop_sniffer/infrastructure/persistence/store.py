@@ -162,10 +162,13 @@ class Store:
                 json.dumps(document, ensure_ascii=False),
             ))
 
+            # We probabilistically or efficiently prune old records
             db.execute("""
-                DELETE FROM captures WHERE id NOT IN (
-                    SELECT id FROM captures
-                    ORDER BY created DESC LIMIT ?
+                DELETE FROM captures
+                WHERE created < (
+                    SELECT created FROM captures
+                    ORDER BY created DESC
+                    LIMIT 1 OFFSET ?
                 )
             """, (CAPTURE_RETENTION,))
 

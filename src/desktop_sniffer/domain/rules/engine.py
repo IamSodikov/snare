@@ -15,7 +15,16 @@ class RuleEngine:
     def replace_rules(self, rules):
         validate_rules(rules)
 
-        self.rules = rules
+        self.rules = []
+        for r in rules:
+            r_copy = dict(r)
+            if r_copy.get("match") == "regex" and r_copy.get("path"):
+                try:
+                    r_copy["_regex"] = re.compile(r_copy["path"])
+                except re.error:
+                    pass
+            self.rules.append(r_copy)
+
         self.hits.clear()
         self.states.clear()
 
@@ -73,8 +82,13 @@ class RuleEngine:
             if mode == "prefix" and not path.startswith(target):
                 continue
 
-            if mode == "regex" and re.search(target, path) is None:
-                continue
+            if mode == "regex":
+                regex = rule.get("_regex")
+                if regex:
+                    if regex.search(path) is None:
+                        continue
+                elif re.search(target, path) is None:
+                    continue
 
             matched = True
 

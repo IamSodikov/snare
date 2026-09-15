@@ -169,11 +169,13 @@ del "%~f0"
 
         if current_app.suffix == ".app":
             sh_path = current_app.parent / "update_snare.sh"
+            pid = os.getpid()
             with open(sh_path, "w") as f:
                 f.write(
                     f"""#!/bin/bash
-unset _MEIPASS2
-sleep 3
+while kill -0 {pid} 2>/dev/null; do
+    sleep 1
+done
 rm -rf "{current_app}"
 mv "{new_app}" "{current_app}"
 open "{current_app}"
@@ -197,11 +199,13 @@ rm "$0"
             QApplication.quit()
     else:
         sh_path = current_exe.parent / "update_snare.sh"
+        pid = os.getpid()
         with open(sh_path, "w") as f:
             f.write(
                 f"""#!/bin/bash
-unset _MEIPASS2
-sleep 3
+while kill -0 {pid} 2>/dev/null; do
+    sleep 1
+done
 rm -f "{current_exe}"
 mv "{downloaded}" "{current_exe}"
 chmod +x "{current_exe}"
