@@ -127,9 +127,17 @@ def apply_update(downloaded_file: str):
         with open(bat_path, "w") as f:
             f.write(
                 f"""@echo off
-set _MEIPASS2=
-timeout /t 3 /nobreak > NUL
-del "{current_exe}"
+setlocal
+for /f "delims==" %%a in ('set _MEI 2^>NUL') do set "%%a="
+for /f "delims==" %%a in ('set _PYI 2^>NUL') do set "%%a="
+
+:loop
+del "{current_exe}" >NUL 2>&1
+if exist "{current_exe}" (
+    timeout /t 1 /nobreak > NUL
+    goto loop
+)
+
 move /y "{downloaded}" "{current_exe}"
 start "" "{current_exe}"
 del "%~f0"
