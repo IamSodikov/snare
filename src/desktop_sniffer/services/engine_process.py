@@ -91,17 +91,29 @@ class EngineProcess(QObject):
             )
             return
 
-        package_root = Path(__file__).resolve().parents[1]
-        addon_entry = (
-            package_root
-            / "infrastructure"
-            / "mitmproxy"
-            / "addon_entry.py"
-        )
+        if getattr(sys, 'frozen', False):
+            addon_entry = (
+                Path(sys._MEIPASS)
+                / "desktop_sniffer"
+                / "infrastructure"
+                / "mitmproxy"
+                / "addon_entry.py"
+            )
+        else:
+            package_root = Path(__file__).resolve().parents[1]
+            addon_entry = (
+                package_root
+                / "infrastructure"
+                / "mitmproxy"
+                / "addon_entry.py"
+            )
 
         if not addon_entry.is_file():
-            self.failed.emit(f"Addon topilmadi: {addon_entry}")
-            return
+            if addon_entry.with_suffix(".pyc").is_file():
+                addon_entry = addon_entry.with_suffix(".pyc")
+            else:
+                self.failed.emit(f"Addon topilmadi: {addon_entry}")
+                return
 
         self._proxy_port = proxy_port
         self._password = secrets.token_hex(16)

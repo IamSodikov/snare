@@ -41,10 +41,14 @@ jobs:
       - name: Build with PyInstaller
         shell: bash
         run: |
+          SEP=":"
+          if [ "${{ matrix.os }}" == "windows-latest" ]; then
+            SEP=";"
+          fi
           pyinstaller --noconfirm --onefile --windowed \
             --name Snare \
             --icon "src/desktop_sniffer/assets/icon.ico" \
-            --add-data "src/desktop_sniffer:desktop_sniffer" \
+            --add-data "src/desktop_sniffer${SEP}desktop_sniffer" \
             --exclude-module PySide6.QtQml \
             --exclude-module PySide6.QtQuick \
             --exclude-module PySide6.QtPdf \

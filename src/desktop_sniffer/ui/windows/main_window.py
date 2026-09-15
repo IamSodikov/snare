@@ -24,6 +24,7 @@ from desktop_sniffer.core.constants import (
 )
 from desktop_sniffer.core.paths import workspaces_dir
 from desktop_sniffer.core.system_proxy import set_windows_proxy
+from desktop_sniffer import __version__
 from desktop_sniffer.core.updater import Updater, DownloadThread, apply_update
 from desktop_sniffer.services.engine_process import EngineProcess
 from desktop_sniffer.services.workspace_service import WorkspaceService
@@ -38,7 +39,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("Snare - HTTP Sniffer & Mock")
+        self.setWindowTitle(f"Snare - HTTP Sniffer & Mock v{__version__}")
         
         icon_path = str(Path(__file__).resolve().parents[3] / "assets" / "icon.ico")
         self.setWindowIcon(QIcon(icon_path))
