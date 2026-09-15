@@ -205,8 +205,8 @@ class CapturesPage(QWidget):
         splitter = QSplitter()
         layout.addWidget(splitter, 1)
 
-        self.table = QTableWidget(0, 4)
-        self.table.setHorizontalHeaderLabels(["Method", "URL", "Status", "Mock"])
+        self.table = QTableWidget(0, 5)
+        self.table.setHorizontalHeaderLabels(["Method", "URL", "RPC Method", "Status", "Mock"])
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -214,6 +214,7 @@ class CapturesPage(QWidget):
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         self.table.verticalHeader().setVisible(False)
         self.table.setAlternatingRowColors(True)
         self.table.itemSelectionChanged.connect(self.show_selected)
@@ -392,7 +393,7 @@ class CapturesPage(QWidget):
         self.table.blockSignals(True)
         self.table.setRowCount(len(rows))
 
-        for row, (flow_id, method, url, status, mock_action) in enumerate(rows):
+        for row, (flow_id, method, url, status, mock_action, rpc_method) in enumerate(rows):
             first = self.table.item(row, 0)
             if first is None:
                 first = text_item("")
@@ -400,20 +401,22 @@ class CapturesPage(QWidget):
                 self.table.setItem(row, 1, text_item(""))
                 self.table.setItem(row, 2, text_item(""))
                 self.table.setItem(row, 3, text_item(""))
+                self.table.setItem(row, 4, text_item(""))
                 
             first = self.table.item(row, 0)
             first.setData(Qt.ItemDataRole.UserRole, flow_id)
             first.setText(method)
             
             self.table.item(row, 1).setText(url)
-            self.table.item(row, 2).setText(str(status) if status is not None else "—")
+            self.table.item(row, 2).setText(rpc_method or "—")
+            self.table.item(row, 3).setText(str(status) if status is not None else "—")
             
             mock_text = ""
             if mock_action == "local": mock_text = "[LOCAL]"
             elif mock_action == "patch": mock_text = "[PATCH]"
             elif mock_action == "request_patch": mock_text = "[REQ]"
             elif mock_action == "replace": mock_text = "[REPLACE]"
-            self.table.item(row, 3).setText(mock_text)
+            self.table.item(row, 4).setText(mock_text)
 
             if flow_id == selected_id:
                 selected_row = row

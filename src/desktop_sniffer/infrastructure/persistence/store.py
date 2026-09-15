@@ -49,6 +49,10 @@ class Store:
                 db.execute("ALTER TABLE captures ADD COLUMN mock_action TEXT;")
             except sqlite3.OperationalError:
                 pass
+            try:
+                db.execute("ALTER TABLE captures ADD COLUMN rpc_method TEXT;")
+            except sqlite3.OperationalError:
+                pass
 
 
         if not self.rules_path.exists():
@@ -115,6 +119,7 @@ class Store:
         status = response["status"] if response else None
 
         display_url = document["url"]
+        rpc_method = None
         if "rpc" in display_url.lower() or "graphql" in display_url.lower():
             req = document.get("request")
             if req and req.get("body_b64"):
@@ -137,18 +142,15 @@ class Store:
                                     if key in item and isinstance(item[key], str):
                                         extracted.append(item[key])
                     if extracted:
-                        joined = ", ".join(extracted)
-                        if len(joined) > 50:
-                            joined = joined[:47] + "..."
-                        display_url = f"{display_url} [{joined}]"
+                        rpc_method = ", ".join(extracted)
                 except Exception:
                     pass
 
         with self.connect() as db:
             db.execute("""
                 INSERT OR REPLACE INTO captures
-                (id, created, method, url, status, mock_action, document)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (id, created, method, url, status, mock_action, rpc_method, document)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 document["id"],
                 document.get("created") or time.time(),
@@ -156,6 +158,7 @@ class Store:
                 display_url,
                 status,
                 document.get("mock_action"),
+                rpc_method,
                 json.dumps(document, ensure_ascii=False),
             ))
 
@@ -170,7 +173,7 @@ class Store:
         with self.connect() as db:
             if not query:
                 return db.execute("""
-                    SELECT id, method, url, status, mock_action
+                    SELECT id, method, url, status, mock_action, rpc_method
                     FROM captures
                     ORDER BY created DESC
                     LIMIT ?
@@ -178,12 +181,12 @@ class Store:
             else:
                 like_query = f"%{query}%"
                 return db.execute("""
-                    SELECT id, method, url, status, mock_action
+                    SELECT id, method, url, status, mock_action, rpc_method
                     FROM captures
-                    WHERE url LIKE ? OR method LIKE ? OR status LIKE ? OR mock_action LIKE ?
+                    WHERE url LIKE ? OR method LIKE ? OR status LIKE ? OR mock_action LIKE ? OR rpc_method LIKE ?
                     ORDER BY created DESC
                     LIMIT ?
-                """, (like_query, like_query, like_query, like_query, limit)).fetchall()
+                """, (like_query, like_query, like_query, like_query, like_query, limit)).fetchall()
 
     def capture(self, flow_id: str):
         with self.connect() as db:
