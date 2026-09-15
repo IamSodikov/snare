@@ -125,14 +125,22 @@ def apply_update(downloaded_file: str):
     if sys.platform == "win32":
         bat_path = current_exe.parent / "update_snare.bat"
         with open(bat_path, "w") as f:
-            f.write(f"""@echo off
+            f.write(
+                f"""@echo off
+set _MEIPASS2=
 timeout /t 3 /nobreak > NUL
 del "{current_exe}"
 move /y "{downloaded}" "{current_exe}"
 start "" "{current_exe}"
 del "%~f0"
-""")
-        subprocess.Popen(str(bat_path), shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
+"""
+            )
+        env = os.environ.copy()
+        env.pop("_MEIPASS2", None)
+        env.pop("_MEIPASS", None)
+        subprocess.Popen(
+            str(bat_path), shell=True, creationflags=subprocess.CREATE_NO_WINDOW, env=env
+        )
         QApplication.quit()
     elif sys.platform == "darwin":
         extract_dir = downloaded.parent / "snare_mac_update"
@@ -146,7 +154,9 @@ del "%~f0"
         if current_app.suffix == ".app":
             sh_path = current_app.parent / "update_snare.sh"
             with open(sh_path, "w") as f:
-                f.write(f"""#!/bin/bash
+                f.write(
+                    f"""#!/bin/bash
+unset _MEIPASS2
 sleep 3
 rm -rf "{current_app}"
 mv "{new_app}" "{current_app}"
@@ -154,21 +164,31 @@ open "{current_app}"
 rm -rf "{extract_dir}"
 rm "{downloaded}"
 rm "$0"
-""")
+"""
+                )
             os.chmod(sh_path, 0o755)
-            subprocess.Popen([str(sh_path)], start_new_session=True)
+            env = os.environ.copy()
+            env.pop("_MEIPASS2", None)
+            env.pop("_MEIPASS", None)
+            subprocess.Popen([str(sh_path)], start_new_session=True, env=env)
             QApplication.quit()
     else:
         sh_path = current_exe.parent / "update_snare.sh"
         with open(sh_path, "w") as f:
-            f.write(f"""#!/bin/bash
+            f.write(
+                f"""#!/bin/bash
+unset _MEIPASS2
 sleep 3
 rm -f "{current_exe}"
 mv "{downloaded}" "{current_exe}"
 chmod +x "{current_exe}"
 "{current_exe}" &
 rm "$0"
-""")
+"""
+            )
         os.chmod(sh_path, 0o755)
-        subprocess.Popen([str(sh_path)], start_new_session=True)
+        env = os.environ.copy()
+        env.pop("_MEIPASS2", None)
+        env.pop("_MEIPASS", None)
+        subprocess.Popen([str(sh_path)], start_new_session=True, env=env)
         QApplication.quit()
