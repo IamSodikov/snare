@@ -38,6 +38,8 @@ def smoke_test(application):
     ready_count = 0
     done = Result()
     finished = False
+    engine_logs = []
+    window.engine.log_received.connect(lambda text: engine_logs.append(text))
 
     def complete(ok, message):
         nonlocal finished
@@ -52,6 +54,7 @@ def smoke_test(application):
                     "ready_count": ready_count,
                     "style": application.style().objectName(),
                     "font": application.font().family(),
+                    "engine_logs": engine_logs[-30:],
                 }
             ),
             encoding="utf-8",

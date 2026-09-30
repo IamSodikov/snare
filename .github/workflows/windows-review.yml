@@ -51,8 +51,8 @@ jobs:
         shell: pwsh
         run: |
           $proc = Start-Process -FilePath (Resolve-Path dist/Snare-Windows.exe) -ArgumentList '--smoke-test' -PassThru -Wait
+          if (Test-Path smoke-result.json) { Get-Content smoke-result.json }
           if ($proc.ExitCode -ne 0) { throw "Packaged smoke failed: $($proc.ExitCode)" }
-          Get-Content smoke-result.json
       - name: Package
         shell: pwsh
         run: |
