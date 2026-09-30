@@ -186,6 +186,7 @@ class EngineProcess(QObject):
         self._poll.stop()
 
         if self._process.state() != QProcess.ProcessState.NotRunning:
+            self.status_changed.emit("Engine to‘xtatilmoqda…")
             self._process.terminate()
             if sync:
                 if not self._process.waitForFinished(3000):

@@ -1,8 +1,8 @@
-# Snare 1.2.0rc1 — Windows review
+# Snare 1.2.0rc2 — Windows review
 
 Download the `Snare-Windows-review` artifact from the **Windows review build** workflow. Unzip it, then run `Snare-Windows.exe`. Python is not required. The executable is Windows x64 and portable. This test build is not Authenticode-signed.
 
-Verified review build: [download Windows artifact](https://github.com/IamSodikov/snare/actions/runs/36707738268/artifacts/11092398950). The GitHub artifact contains `Snare-Windows-review.zip`; extract that ZIP too. The artifact expires on October 30, 2026. Source build commit: `1e2ab0be8e1a881ecb535d5ec7058f1d14c9105c`.
+Previous 1.2.0rc1 build: [download Windows artifact](https://github.com/IamSodikov/snare/actions/runs/36707738268/artifacts/11092398950). The GitHub artifact contains `Snare-Windows-review.zip`; extract that ZIP too. The artifact expires on October 30, 2026. Source build commit: `1e2ab0be8e1a881ecb535d5ec7058f1d14c9105c`.
 
 The artifact contains `SHA256SUMS`, build information and the result of a packaged smoke test. The test starts the actual executable, opens its Qt UI, starts its internal proxy, restarts the proxy, waits beyond the previous kill timer, sends a real local mock request and verifies the stored final capture.
 
@@ -11,15 +11,19 @@ The artifact contains `SHA256SUMS`, build information and the result of a packag
 - Fusion widgets, bundled Noto Sans, one light palette and consistent button sizes on Windows, Linux and macOS. Emoji-dependent controls were removed. The compact main window fits 1024×768.
 - Cancellable engine stop timer and own-addon readiness; previous Windows proxy/PAC values are restored on stop, restart, failure and close. A stale snapshot is recovered on the next single-instance startup.
 - Versioned JSON patches support null, false, zero, empty collections and literal deletion-marker strings. Body edits recompute patches; truncated body replacement is blocked.
-- Explicit Edit/Discard drafts, original/modified/diff, raw/hex preview, lazy large-body display, pending/duration/size columns, method/status/mock filters, pinning and pause-view.
+- Click-to-edit bodies and fields; selection/Ctrl+C and section context menus for copy/edit/discard; original/modified/diff, raw/hex preview, lazy large-body display, pending/duration/size columns, method/status/mock filters, pinning and pause-view.
 - Copy as cURL (POSIX shell syntax), deliberate Replay through the proxy, sanitized HAR import/export, rule reorder, per-rule match explanations, hits/scenario/drop dashboard and reset.
 - Mobile interface selector, copy/QR, optional LAN proxy password, include/bypass host regex, optional recording/redaction, time/byte/row retention and disk maintenance.
 - WebSocket messages and SSE frames, local OpenAPI JSON example import (disabled rules), and `snare-cli` for headless runs and matching.
 - Invalid-rule backups/recovery, aligned version and assets, HTTPS-only update checks, semantic version comparison, SHA256 verification and cooperative download cancellation. Downloads open beside the working application; the updater no longer deletes/replaces the installed executable.
 
+## 1.2.0rc2 interaction changes
+
+Replay and Pin/Unpin appear on the hovered traffic row and act on that row without replacing the current draft selection. While Pause view is enabled, the row also shows Play to resume list updates. Pause view does not intercept or hold network requests. The row context menu provides the same actions. Body editing starts with a click; large bounded previews open their full editor on double-click or via their context menu. Truncated and binary body safeguards remain in place.
+
 ## Windows check
 
-1. Start the program and confirm `Running` appears.
+1. Open the program in `Start · Stopped`, click **Start**, and confirm the same button turns green with `Stop · Running`. Amber means starting/stopping or connection changes; red means an error.
 2. Open **Connection / Storage**, enable Windows System Proxy, then send a test HTTP request. For HTTPS trust the CA shown by **Mobile Setup**.
 3. Select traffic, edit response JSON, click **Apply → Mock**, repeat the request, then inspect **Original / Modified / Diff**.
 4. Restart several times and wait at least five seconds. Change the port with **Apply connection**.

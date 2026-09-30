@@ -19,6 +19,13 @@ QPushButton:focus, QToolButton:focus { border: 2px solid #1475c9; }
 QPushButton:disabled, QToolButton:disabled { color: #8997a9; background: #edf1f5; }
 QPushButton[role="primary"] { background: #176fb2; color: white; border-color: #176fb2; font-weight: 600; }
 QPushButton[role="primary"]:hover { background: #125d97; }
+QPushButton[engineState] { color: white; font-weight: 600; }
+QPushButton[engineState="stopped"] { background: #52687f; border-color: #52687f; }
+QPushButton[engineState="running"] { background: #15803d; border-color: #15803d; }
+QPushButton[engineState="running"]:hover { background: #166534; }
+QPushButton[engineState="starting"], QPushButton[engineState="stopping"],
+QPushButton[engineState="changed"] { background: #a65c00; border-color: #a65c00; }
+QPushButton[engineState="error"] { background: #b91c1c; border-color: #b91c1c; }
 QPushButton[role="danger"] { color: #ad3030; background: #fff2f2; }
 QLineEdit, QSpinBox, QComboBox, QPlainTextEdit { background: white; border: 1px solid #cbd7e4;
   border-radius: 5px; padding: 6px; selection-background-color: #cce5ff; selection-color: #163858; }

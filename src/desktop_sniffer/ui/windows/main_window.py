@@ -36,7 +36,7 @@ from desktop_sniffer.ui.theme import ASSETS
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, autostart=True):
+    def __init__(self, autostart=False):
         super().__init__()
         self.setWindowTitle(f"Snare {__version__} — HTTP Inspector & Mock")
         self.setWindowIcon(QIcon(str(ASSETS / "icon.ico")))
@@ -48,6 +48,7 @@ class MainWindow(QMainWindow):
         self.engine = EngineProcess(self)
         self.proxy = SystemProxy(application_data_dir() / "proxy-recovery.json")
         self.engine_ready = False
+        self._engine_error = False
         self._closing = False
         self.download_thread = None
         self.rules_page = self.captures_page = None
@@ -66,10 +67,8 @@ class MainWindow(QMainWindow):
         controls.addWidget(self.workspace_label)
         controls.addWidget(button("Workspace", self.choose_workspace))
         controls.addStretch()
-        self.status_indicator = QLabel("Stopped")
-        controls.addWidget(self.status_indicator)
         self.engine_toggle = button("Start", self.toggle_engine)
-        self.engine_toggle.setProperty("role", "primary")
+        self.set_engine_state("stopped")
         controls.addWidget(self.engine_toggle)
         controls.addWidget(button("Restart", self.restart_engine))
         self.connection_toggle = QCheckBox("Connection / Storage")
@@ -85,9 +84,7 @@ class MainWindow(QMainWindow):
         self.system_proxy = QCheckBox("Windows System Proxy")
         self.system_proxy.setEnabled(SystemProxy.supported())
         if not SystemProxy.supported():
-            self.system_proxy.setToolTip(
-                "Bu platformada ilova/brauzer proksisini qo‘lda sozlang"
-            )
+            self.system_proxy.setToolTip("Bu platformada ilova/brauzer proksisini qo‘lda sozlang")
         connection_controls.addWidget(QLabel("Port"))
         connection_controls.addWidget(self.proxy_port)
         for widget in (self.allow_lan, self.auth, self.system_proxy):
@@ -98,9 +95,7 @@ class MainWindow(QMainWindow):
         connection_layout.addLayout(connection_controls)
         filters = QHBoxLayout()
         self.include_hosts = QLineEdit()
-        self.include_hosts.setPlaceholderText(
-            "Include hosts regex (vergul bilan, ixtiyoriy)"
-        )
+        self.include_hosts.setPlaceholderText("Include hosts regex (vergul bilan, ixtiyoriy)")
         self.exclude_hosts = QLineEdit()
         self.exclude_hosts.setPlaceholderText("Bypass hosts regex (vergul bilan)")
         filters.addWidget(self.include_hosts)
@@ -289,7 +284,7 @@ class MainWindow(QMainWindow):
             self.engine_ready = False
             self.captures_page.proxy_ready = False
             self.restore_proxy()
-            self.status_indicator.setText("Port o‘zgardi — Apply connection")
+            self.set_engine_state("changed")
 
     def restore_proxy(self):
         try:
@@ -320,29 +315,57 @@ class MainWindow(QMainWindow):
         page.proxy_port = self.proxy_port.value()
         page.proxy_auth = self.auth.isChecked()
         page.proxy_password = self.engine._password
-        page.ca_path = (
-            self.store.root.parent.parent / "mitmproxy" / "mitmproxy-ca-cert.pem"
-        )
+        page.ca_path = self.store.root.parent.parent / "mitmproxy" / "mitmproxy-ca-cert.pem"
         if self.system_proxy.isChecked():
             self.toggle_system_proxy(True)
+
+    def set_engine_state(self, state):
+        labels = {
+            "stopped": "Start · Stopped",
+            "starting": "Stop · Starting…",
+            "running": "Stop · Running",
+            "stopping": "Stopping…",
+            "error": "Start · Error",
+            "changed": "Stop · Apply connection",
+        }
+        self.engine_toggle.setText(labels[state])
+        self.engine_toggle.setProperty("engineState", state)
+        self.engine_toggle.setEnabled(state != "stopping")
+        self.engine_toggle.setAccessibleName(labels[state])
+        self.engine_toggle.setToolTip(
+            "Proxy ishlayapti — to‘xtatish uchun bosing" if state == "running" else labels[state]
+        )
+        style = self.engine_toggle.style()
+        style.unpolish(self.engine_toggle)
+        style.polish(self.engine_toggle)
+        self.engine_toggle.update()
 
     def set_status(self, message):
         if self.captures_page is None:
             return
         self.statusBar().showMessage(message)
         if message.startswith("Proxy:"):
-            self.status_indicator.setText("Running")
-            self.engine_toggle.setText("Stop")
+            self.set_engine_state("running")
         elif message.startswith("Engine ishga"):
+            self._engine_error = False
             self.engine_ready = False
             self.captures_page.proxy_ready = False
-            self.status_indicator.setText("Starting…")
-            self.engine_toggle.setText("Stop")
+            self.set_engine_state("starting")
         else:
             self.engine_ready = False
             self.captures_page.proxy_ready = False
-            self.status_indicator.setText("Stopped")
-            self.engine_toggle.setText("Start")
+            state = (
+                "stopping"
+                if message.startswith("Engine to‘xtatilmoqda")
+                else "error"
+                if message.startswith("Engine to‘xtadi:")
+                else "stopped"
+            )
+            if state == "error":
+                self._engine_error = True
+            elif state == "stopped" and self._engine_error:
+                state = "error"
+            self.set_engine_state(state)
             self.restore_proxy()
 
     def restart_engine(self):
@@ -372,6 +395,7 @@ class MainWindow(QMainWindow):
         )
 
     def toggle_engine(self):
+        self._engine_error = False
         if self.engine._process.state() != self.engine._process.ProcessState.NotRunning:
             self.restore_proxy()
             self.engine_ready = False
@@ -381,11 +405,11 @@ class MainWindow(QMainWindow):
             self.restart_engine()
 
     def show_engine_error(self, message):
+        self._engine_error = True
         self.restore_proxy()
         self.engine_ready = False
         self.captures_page.proxy_ready = False
-        self.engine_toggle.setText("Start")
-        self.status_indicator.setText("Error")
+        self.set_engine_state("error")
         self.logs_page.append_log(message)
         self.statusBar().showMessage(message)
         self.tabs.setCurrentWidget(self.logs_page)
@@ -443,8 +467,7 @@ class MainWindow(QMainWindow):
 
         def complete():
             if (
-                self.engine._process.state()
-                == self.engine._process.ProcessState.NotRunning
+                self.engine._process.state() == self.engine._process.ProcessState.NotRunning
                 and not (self.download_thread and self.download_thread.isRunning())
             ):
                 self._close_timer.stop()

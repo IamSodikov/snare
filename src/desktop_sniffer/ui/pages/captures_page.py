@@ -8,9 +8,10 @@ from pathlib import Path
 from urllib.parse import parse_qsl, urlsplit
 from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener
 
-from PySide6.QtCore import QRegularExpression, Qt, QTimer, Signal, QSettings
+from PySide6.QtCore import QEvent, QRegularExpression, Qt, QTimer, Signal, QSettings
 from PySide6.QtGui import (
     QColor,
+    QCursor,
     QFont,
     QGuiApplication,
     QKeySequence,
@@ -32,6 +33,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
+    QMenu,
     QPlainTextEdit,
     QPushButton,
     QSpinBox,
@@ -100,9 +102,7 @@ class EditorDialog(QDialog):
             self.highlighter = JsonHighlighter(self.editor.document())
 
         self.editor.setPlainText(text)
-        self.editor.setTabStopDistance(
-            self.editor.fontMetrics().horizontalAdvance(" ") * 2
-        )
+        self.editor.setTabStopDistance(self.editor.fontMetrics().horizontalAdvance(" ") * 2)
         layout.addWidget(self.editor)
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
@@ -127,9 +127,7 @@ class HeadersTableWidget(QTableWidget):
         self.setHorizontalHeaderLabels(["Key", "Value"])
         from PySide6.QtWidgets import QHeaderView
 
-        self.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.ResizeMode.ResizeToContents
-        )
+        self.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.verticalHeader().setVisible(False)
         self.setAlternatingRowColors(True)
@@ -170,6 +168,10 @@ class HeadersTableWidget(QTableWidget):
 
 
 class BodyTextEdit(QPlainTextEdit):
+    edit_requested = Signal()
+    dialog_edit_requested = Signal()
+    discard_requested = Signal()
+
     def __init__(self, title="", parent=None):
         super().__init__(parent)
         self.title = title
@@ -179,13 +181,46 @@ class BodyTextEdit(QPlainTextEdit):
         font.setStyleHint(QFont.StyleHint.Monospace)
         self.setFont(font)
         self.highlighter = JsonHighlighter(self.document())
+        self._setting_text = False
+        self.full_text = ""
+        self.textChanged.connect(self._sync_text)
+        self.setToolTip("Body ichiga bosib tahrirlang; Ctrl+C yoki o‘ng tugma bilan nusxalang")
+
+    def _sync_text(self):
+        if not self._setting_text:
+            self.full_text = super().toPlainText()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.edit_requested.emit()
+        super().mousePressEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton and len(self.full_text) > 65536:
+            self.dialog_edit_requested.emit()
+            return
+        super().mouseDoubleClickEvent(event)
+
+    def contextMenuEvent(self, event):
+        menu = self.createStandardContextMenu()
+        menu.addSeparator()
+        menu.addAction(
+            "Copy full body", lambda: QGuiApplication.clipboard().setText(self.toPlainText())
+        )
+        menu.addAction("Edit body…", self.dialog_edit_requested.emit)
+        menu.addAction("Discard changes", self.discard_requested.emit)
+        menu.exec(event.globalPos())
 
     def setPlainText(self, text):
         self.full_text = text
         preview = text[:65536]
         if len(text) > 65536:
             preview += "\n\n[Preview: 64 KiB. Tahrirlash/Nusxa olish to‘liq body’dan foydalanadi.]"
-        super().setPlainText(preview)
+        self._setting_text = True
+        try:
+            super().setPlainText(preview)
+        finally:
+            self._setting_text = False
 
     def toPlainText(self):
         return getattr(self, "full_text", "")
@@ -240,17 +275,11 @@ class JsonTreeDialog(QDialog):
                 return
             item_value = self.values.pop(identity)
             node.takeChildren()
-            pairs = (
-                item_value.items()
-                if isinstance(item_value, dict)
-                else enumerate(item_value)
-            )
+            pairs = item_value.items() if isinstance(item_value, dict) else enumerate(item_value)
             for index, (key, child) in enumerate(pairs):
                 if index >= 500:
                     node.addChild(
-                        QTreeWidgetItem(
-                            ["Preview limited to 500 items", "Copy body for full JSON"]
-                        )
+                        QTreeWidgetItem(["Preview limited to 500 items", "Copy body for full JSON"])
                     )
                     break
                 add(node, key, child)
@@ -282,9 +311,7 @@ class CapturesPage(QWidget):
         self.proxy_ready = False
         self.ca_path = None
         self.preferences = QSettings("LocalTools", "Snare")
-        self.pinned = set(
-            self.preferences.value("pins/" + self.store.root.name, [], type=list)
-        )
+        self.pinned = set(self.preferences.value("pins/" + self.store.root.name, [], type=list))
         for prefix in ("req", "res"):
             setattr(self, prefix + "_initial_headers", "")
             setattr(self, prefix + "_initial_body", "")
@@ -293,18 +320,14 @@ class CapturesPage(QWidget):
         layout = QVBoxLayout(self)
         controls = QHBoxLayout()
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText(
-            "Host, URL, RPC yoki mock bo‘yicha qidirish (Ctrl+F)"
-        )
+        self.search_input.setPlaceholderText("Host, URL, RPC yoki mock bo‘yicha qidirish (Ctrl+F)")
         self.search_input.textChanged.connect(lambda: self.refresh(force=True))
         self.method_filter = QComboBox()
         self.method_filter.addItems(
             ["All methods", "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
         )
         self.status_filter = QComboBox()
-        self.status_filter.addItems(
-            ["All status", "2xx", "3xx", "4xx", "5xx", "Errors", "Pending"]
-        )
+        self.status_filter.addItems(["All status", "2xx", "3xx", "4xx", "5xx", "Errors", "Pending"])
         self.mock_filter = QCheckBox("Mock")
         self.pin_filter = QCheckBox("Pinned")
         for widget in (self.method_filter, self.status_filter):
@@ -312,6 +335,8 @@ class CapturesPage(QWidget):
         for widget in (self.mock_filter, self.pin_filter):
             widget.toggled.connect(lambda: self.refresh(force=True))
         self.pause = QCheckBox("Pause view")
+        self.pause.setToolTip("Faqat ro‘yxat yangilanishini to‘xtatadi; so‘rovlar davom etadi")
+        self.pause.toggled.connect(self.pause_changed)
         for widget in (
             self.search_input,
             self.method_filter,
@@ -325,17 +350,13 @@ class CapturesPage(QWidget):
         actions = QHBoxLayout()
         for title, callback in [
             ("Copy cURL", self.copy_curl),
-            ("Replay", self.replay),
-            ("Pin / Unpin", self.pin),
             ("HAR Import", self.har_import),
             ("HAR Export", self.har_export),
             ("Clear", self.clear),
         ]:
             actions.addWidget(button(title, callback))
         actions.addStretch()
-        self.info = QLabel(
-            "Trafikni tanlang. HTTPS uchun CA sertifikatiga ishonch kerak."
-        )
+        self.info = QLabel("Trafikni tanlang. HTTPS uchun CA sertifikatiga ishonch kerak.")
         self.info.setProperty("role", "muted")
         actions.addWidget(self.info)
         layout.addLayout(actions)
@@ -355,10 +376,28 @@ class CapturesPage(QWidget):
             self.table.horizontalHeader().setSectionResizeMode(
                 index, QHeaderView.ResizeMode.ResizeToContents
             )
-        self.table.horizontalHeader().setSectionResizeMode(
-            2, QHeaderView.ResizeMode.Stretch
-        )
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self.table.itemSelectionChanged.connect(self.show_selected)
+        self.table.setMouseTracking(True)
+        self.table.viewport().installEventFilter(self)
+        self.table.verticalScrollBar().valueChanged.connect(lambda: self.row_actions.hide())
+        self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self.traffic_menu)
+        self.hover_id = None
+        self.row_actions = QWidget(self.table.viewport())
+        row_controls = QHBoxLayout(self.row_actions)
+        row_controls.setContentsMargins(2, 1, 2, 1)
+        row_controls.setSpacing(3)
+        self.row_replay = button("Replay", lambda: self.replay(self.row_replay.property("target")))
+        self.row_pin = button("Pin", lambda: self.pin(self.row_pin.property("target")))
+        for control in (self.row_replay, self.row_pin):
+            control.pressed.connect(lambda c=control: c.setProperty("target", self.hover_id))
+        self.row_play = button("Play", self.resume_view)
+        self.row_play.setToolTip("Trafik ro‘yxati yangilanishini davom ettirish")
+        for control in (self.row_replay, self.row_pin, self.row_play):
+            control.setStyleSheet("padding: 2px 6px; min-height: 16px;")
+            row_controls.addWidget(control)
+        self.row_actions.hide()
         splitter.addWidget(self.table)
         self.details = QTabWidget()
         splitter.addWidget(self.details)
@@ -371,17 +410,6 @@ class CapturesPage(QWidget):
             view.addItems(["Modified", "Original", "Diff"])
             setattr(self, prefix + "_view", view)
             toolbar.addWidget(view)
-            edit = button("Edit", lambda p=prefix: self.begin_edit(p))
-            toolbar.addWidget(edit)
-            toolbar.addWidget(button("Discard", self.discard))
-            toolbar.addWidget(
-                button(
-                    "Copy body",
-                    lambda p=prefix: QGuiApplication.clipboard().setText(
-                        getattr(self, p + "_body").toPlainText()
-                    ),
-                )
-            )
             form.addLayout(toolbar)
             fields = QFormLayout()
             if prefix == "req":
@@ -400,6 +428,10 @@ class CapturesPage(QWidget):
             headers = HeadersTableWidget(title + " Headers")
             headers.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
             setattr(self, prefix + "_headers", headers)
+            headers.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            headers.customContextMenuRequested.connect(
+                lambda pos, p=prefix: self.headers_menu(p, pos)
+            )
             form.addWidget(QLabel("Headers"))
             form.addWidget(headers, 1)
             body = BodyTextEdit(title + " Body")
@@ -409,7 +441,9 @@ class CapturesPage(QWidget):
             body_row.addStretch()
             body_row.addWidget(button("JSON tree", lambda p=prefix: self.json_tree(p)))
             body_row.addWidget(button("Raw / Hex", lambda p=prefix: self.raw_body(p)))
-            body_row.addWidget(button("Edit body", lambda p=prefix: self.edit_body(p)))
+            body.edit_requested.connect(lambda p=prefix: self.inline_body(p))
+            body.dialog_edit_requested.connect(lambda p=prefix: self.edit_body(p))
+            body.discard_requested.connect(self.discard)
             form.addLayout(body_row)
             form.addWidget(body, 2)
             save = button(
@@ -446,18 +480,86 @@ class CapturesPage(QWidget):
         self.timer.start()
         self.refresh(force=True)
 
+    def pause_changed(self, checked):
+        self.row_actions.hide()
+        if not checked:
+            self.refresh(force=True)
+
+    def resume_view(self):
+        self.pause.setChecked(False)
+
+    def eventFilter(self, watched, event):
+        if watched is self.table.viewport():
+            if event.type() == QEvent.Type.MouseMove:
+                self.show_row_actions(self.table.rowAt(int(event.position().y())))
+            elif event.type() == QEvent.Type.Leave:
+                if (
+                    not self.table.viewport()
+                    .rect()
+                    .contains(self.table.viewport().mapFromGlobal(QCursor.pos()))
+                ):
+                    self.row_actions.hide()
+        return super().eventFilter(watched, event)
+
+    def show_row_actions(self, row):
+        if row < 0 or not self.table.item(row, 0):
+            self.row_actions.hide()
+            return
+        self.hover_id = self.table.item(row, 0).data(Qt.ItemDataRole.UserRole)
+        self.row_pin.setText("Unpin" if self.hover_id in self.pinned else "Pin")
+        self.row_play.setVisible(self.pause.isChecked())
+        self.row_replay.setEnabled(self.proxy_ready)
+        self.row_actions.adjustSize()
+        rect = self.table.visualItemRect(self.table.item(row, 2))
+        x = max(0, self.table.viewport().width() - self.row_actions.width() - 2)
+        self.row_actions.move(x, rect.top())
+        self.row_actions.show()
+        self.row_actions.raise_()
+
+    def traffic_menu(self, pos):
+        row = self.table.rowAt(pos.y())
+        if row < 0:
+            row = self.table.currentRow()
+        if row < 0:
+            return
+        fid = self.table.item(row, 0).data(Qt.ItemDataRole.UserRole)
+        menu = QMenu(self.table)
+        action = menu.addAction("Replay", lambda: self.replay(fid))
+        action.setEnabled(self.proxy_ready)
+        menu.addAction("Unpin" if fid in self.pinned else "Pin", lambda: self.pin(fid))
+        if self.pause.isChecked():
+            menu.addAction("Play — resume view", self.resume_view)
+        menu.exec(self.table.viewport().mapToGlobal(pos))
+
+    def headers_menu(self, prefix, pos):
+        table = getattr(self, prefix + "_headers")
+        menu = QMenu(table)
+        menu.addAction(
+            "Copy selected",
+            lambda: QGuiApplication.clipboard().setText(
+                "\n".join(item.text() for item in table.selectedItems())
+            ),
+        )
+        menu.addAction(
+            "Copy all headers", lambda: QGuiApplication.clipboard().setText(table.toPlainText())
+        )
+        menu.addAction("Edit headers…", lambda: self.edit_headers(prefix))
+        menu.addAction("Discard changes", self.discard)
+        menu.exec(table.viewport().mapToGlobal(pos))
+
+    def edit_headers(self, prefix):
+        if self.current_document:
+            self.begin_edit(prefix)
+            getattr(self, prefix + "_headers").open_editor()
+
     def refresh(self, force=False):
         if self.pause.isChecked() and not force:
             return
         try:
             rows = self.store.capture_rows(
                 self.search_input.text().strip(),
-                self.method_filter.currentText()
-                if self.method_filter.currentIndex()
-                else "",
-                self.status_filter.currentText()
-                if self.status_filter.currentIndex()
-                else "",
+                self.method_filter.currentText() if self.method_filter.currentIndex() else "",
+                self.status_filter.currentText() if self.status_filter.currentIndex() else "",
                 self.mock_filter.isChecked(),
             )
             if self.pin_filter.isChecked():
@@ -466,6 +568,7 @@ class CapturesPage(QWidget):
             if not force and revision == self._last_revision:
                 return
             self._last_revision = revision
+            self.row_actions.hide()
             self.table.blockSignals(True)
             self.table.setRowCount(len(rows))
             selected = None
@@ -510,6 +613,9 @@ class CapturesPage(QWidget):
             self.table.blockSignals(False)
             if selected is not None and not self._dirty:
                 self.show_selected()
+            cursor = self.table.viewport().mapFromGlobal(QCursor.pos())
+            if self.table.viewport().rect().contains(cursor):
+                self.show_row_actions(self.table.rowAt(cursor.y()))
             stats = self.store.statistics()
             self.info.setText(
                 f"{len(rows)} / {stats['count']} capture · {stats['bytes'] / 1024 / 1024:.1f} MiB"
@@ -539,10 +645,7 @@ class CapturesPage(QWidget):
         if fid != self.selected_id and not self.can_leave():
             self.table.blockSignals(True)
             for i in range(self.table.rowCount()):
-                if (
-                    self.table.item(i, 0).data(Qt.ItemDataRole.UserRole)
-                    == self.selected_id
-                ):
+                if self.table.item(i, 0).data(Qt.ItemDataRole.UserRole) == self.selected_id:
                     self.table.selectRow(i)
                     break
             self.table.blockSignals(False)
@@ -602,13 +705,25 @@ class CapturesPage(QWidget):
                         )
                         or "Body o‘zgarmagan"
                     )
-                headers = "\n".join(
-                    f"{k}: {v}" for k, v in (snap or {}).get("headers", [])
-                )
+                headers = "\n".join(f"{k}: {v}" for k, v in (snap or {}).get("headers", []))
                 setattr(self, prefix + "_initial_headers", headers)
                 setattr(self, prefix + "_initial_body", text)
                 getattr(self, prefix + "_headers").setPlainText(headers)
+                getattr(self, prefix + "_body").setReadOnly(True)
                 getattr(self, prefix + "_body").setPlainText(text)
+                editable = view != "Diff" and bool(snap)
+                getattr(self, prefix + "_headers").setEditTriggers(
+                    QAbstractItemView.EditTrigger.DoubleClicked
+                    | QAbstractItemView.EditTrigger.SelectedClicked
+                    | QAbstractItemView.EditTrigger.EditKeyPressed
+                    if editable
+                    else QAbstractItemView.EditTrigger.NoEditTriggers
+                )
+                if prefix == "req":
+                    self.req_method.setReadOnly(not editable)
+                    self.req_url.setReadOnly(not editable)
+                else:
+                    self.res_status.setEnabled(editable)
                 if prefix == "req":
                     self.req_initial_method = (snap or {}).get("method", doc["method"])
                     self.req_initial_url = (snap or {}).get("url", doc["url"])
@@ -681,15 +796,30 @@ class CapturesPage(QWidget):
         if view.currentText() == "Diff":
             view.setCurrentIndex(0)
         self._editing = True
-        self.req_method.setReadOnly(False)
-        self.req_url.setReadOnly(False)
-        self.res_status.setEnabled(True)
-        for p in ("req", "res"):
-            getattr(self, p + "_headers").setEditTriggers(
-                QAbstractItemView.EditTrigger.DoubleClicked
-                | QAbstractItemView.EditTrigger.EditKeyPressed
-            )
-        self.info.setText("Edit mode · Apply → Mock yoki Discard")
+        if prefix == "req":
+            self.req_method.setReadOnly(False)
+            self.req_url.setReadOnly(False)
+        else:
+            self.res_status.setEnabled(True)
+        getattr(self, prefix + "_headers").setEditTriggers(
+            QAbstractItemView.EditTrigger.DoubleClicked
+            | QAbstractItemView.EditTrigger.SelectedClicked
+            | QAbstractItemView.EditTrigger.EditKeyPressed
+        )
+        self.info.setText("Draft · Apply → Mock; bekor qilish uchun o‘ng tugma → Discard changes")
+
+    def inline_body(self, prefix):
+        body = getattr(self, prefix + "_body")
+        if not self.current_document or getattr(self, prefix + "_view").currentText() == "Diff":
+            return
+        # Large previews remain bounded; double-click opens the full editor.
+        if len(body.toPlainText()) > 65536 or not body.isReadOnly():
+            return
+        snap = getattr(self, prefix + "_snapshot")
+        if not snap or snap.get("truncated") or body.toPlainText().startswith("<binary"):
+            return
+        self.begin_edit(prefix)
+        body.setReadOnly(False)
 
     def edit_body(self, prefix):
         self.begin_edit(prefix)
@@ -697,9 +827,7 @@ class CapturesPage(QWidget):
         if not self.guard_body(snap, True):
             return
         if any("<binary" in getattr(self, prefix + "_body").toPlainText() for _ in [0]):
-            QMessageBox.warning(
-                self, "Binary", "Binary body uchun Fixture qoidasidan foydalaning"
-            )
+            QMessageBox.warning(self, "Binary", "Binary body uchun Fixture qoidasidan foydalaning")
             return
         getattr(self, prefix + "_body").open_editor()
 
@@ -713,6 +841,7 @@ class CapturesPage(QWidget):
             getattr(self, p + "_headers").setEditTriggers(
                 QAbstractItemView.EditTrigger.NoEditTriggers
             )
+            getattr(self, p + "_body").setReadOnly(True)
             getattr(self, p + "_save_btn").hide()
 
     def discard(self):
@@ -721,8 +850,9 @@ class CapturesPage(QWidget):
         self.render_document()
 
     def check_req_changes(self):
-        if self._loading or not self._editing or not self.req_snapshot:
+        if self._loading or not self.req_snapshot:
             return
+        self._editing = True
         changed = (
             self.req_method.text() != self.req_initial_method
             or self.req_url.text() != self.req_initial_url
@@ -730,18 +860,19 @@ class CapturesPage(QWidget):
             or self.req_body.toPlainText() != self.req_initial_body
         )
         self.req_save_btn.setVisible(changed)
-        self._dirty = changed or self.res_save_btn.isVisible()
+        self._dirty = changed or not self.res_save_btn.isHidden()
 
     def check_res_changes(self):
-        if self._loading or not self._editing or not self.res_snapshot:
+        if self._loading or not self.res_snapshot:
             return
+        self._editing = True
         changed = (
             self.res_status.value() != self.res_initial_status
             or self.res_headers.toPlainText() != self.res_initial_headers
             or self.res_body.toPlainText() != self.res_initial_body
         )
         self.res_save_btn.setVisible(changed)
-        self._dirty = changed or self.req_save_btn.isVisible()
+        self._dirty = changed or not self.req_save_btn.isHidden()
 
     def guard_body(self, snapshot, changed):
         if not snapshot:
@@ -764,18 +895,15 @@ class CapturesPage(QWidget):
         except ValueError as exc:
             QMessageBox.warning(self, "cURL", str(exc))
 
-    def replay(self):
-        if not self.current_document or not self.proxy_ready:
-            QMessageBox.warning(
-                self, "Replay", "Engine tayyor bo‘lishi va trafik tanlanishi kerak"
-            )
+    def replay(self, fid=None):
+        document = self.store.capture(fid) if fid else self.current_document
+        if not document or not self.proxy_ready:
+            QMessageBox.warning(self, "Replay", "Engine tayyor bo‘lishi va trafik tanlanishi kerak")
             return
-        doc = json.loads(json.dumps(self.current_document))
+        doc = json.loads(json.dumps(document))
         snapshot = doc.get("request_original") or doc.get("request") or {}
         if snapshot.get("truncated") or doc.get("redacted"):
-            QMessageBox.warning(
-                self, "Replay", "Kesilgan yoki redacted request qayta yuborilmaydi"
-            )
+            QMessageBox.warning(self, "Replay", "Kesilgan yoki redacted request qayta yuborilmaydi")
             return
         if snapshot.get("method", doc["method"]) not in ("GET", "HEAD", "OPTIONS"):
             if (
@@ -819,8 +947,7 @@ class CapturesPage(QWidget):
                 if auth:
                     request.add_header(
                         "Proxy-Authorization",
-                        "Basic "
-                        + base64.b64encode(f"snare:{password}".encode()).decode(),
+                        "Basic " + base64.b64encode(f"snare:{password}".encode()).decode(),
                     )
                 request.set_proxy(f"127.0.0.1:{port}", urlsplit(url).scheme)
                 with opener.open(request, timeout=30) as response:
@@ -831,15 +958,14 @@ class CapturesPage(QWidget):
 
         threading.Thread(target=send, daemon=True).start()
 
-    def pin(self):
-        if self.selected_id:
-            if self.selected_id in self.pinned:
-                self.pinned.remove(self.selected_id)
+    def pin(self, fid=None):
+        fid = fid or self.selected_id
+        if fid:
+            if fid in self.pinned:
+                self.pinned.remove(fid)
             else:
-                self.pinned.add(self.selected_id)
-            self.preferences.setValue(
-                "pins/" + self.store.root.name, sorted(self.pinned)
-            )
+                self.pinned.add(fid)
+            self.preferences.setValue("pins/" + self.store.root.name, sorted(self.pinned))
             self.refresh(force=True)
 
     def har_export(self):
@@ -983,9 +1109,7 @@ class CapturesPage(QWidget):
         doc = self.current_document
         target = doc.get("request_original") or doc.get("request") or {}
         parsed = urlsplit(target.get("url", doc["url"]))
-        replacements, removed = self.header_changes(
-            self.req_snapshot["headers"], headers
-        )
+        replacements, removed = self.header_changes(self.req_snapshot["headers"], headers)
 
         body_changed = self.req_body.toPlainText() != self.req_initial_body
         method_changed = self.req_method.text() != self.req_initial_method
@@ -1059,9 +1183,7 @@ class CapturesPage(QWidget):
         doc = self.current_document
         target = doc.get("request_original") or doc.get("request") or {}
         parsed = urlsplit(target.get("url", doc["url"]))
-        replacements, removed = self.header_changes(
-            self.res_snapshot["headers"], headers
-        )
+        replacements, removed = self.header_changes(self.res_snapshot["headers"], headers)
 
         body_changed = self.res_body.toPlainText() != self.res_initial_body
         status_changed = self.res_status.value() != self.res_initial_status

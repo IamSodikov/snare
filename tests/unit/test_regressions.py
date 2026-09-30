@@ -26,9 +26,7 @@ def test_patch_all_json_values(value):
 
 
 def test_patch_remove_and_legacy():
-    assert apply_patch({"a": 1, "b": 2}, deep_diff({"a": 1, "b": 2}, {"b": 3})) == {
-        "b": 3
-    }
+    assert apply_patch({"a": 1, "b": 2}, deep_diff({"a": 1, "b": 2}, {"b": 3})) == {"b": 3}
     assert apply_patch({"a": 1}, {"a": "__SNARE_DELETE_FIELD__"}) == {}
 
 
@@ -89,10 +87,7 @@ def test_record_off_and_redaction(tmp_path):
     s.save_capture(d)
     saved = s.capture("1")
     assert saved["request"]["headers"][0][1] == "<redacted>"
-    assert (
-        json.loads(base64.b64decode(saved["request"]["body_b64"]))["token"]
-        == "<redacted>"
-    )
+    assert json.loads(base64.b64decode(saved["request"]["body_b64"]))["token"] == "<redacted>"
     assert d["request"]["headers"][0][1] == "Bearer secret"
 
 
@@ -113,12 +108,8 @@ def test_proxy_restore_keeps_user_external_changes(tmp_path, monkeypatch):
     }
     values = copy.deepcopy(before)
     monkeypatch.setattr(SystemProxy, "supported", staticmethod(lambda: True))
-    monkeypatch.setattr(
-        SystemProxy, "_read", staticmethod(lambda: copy.deepcopy(values))
-    )
-    monkeypatch.setattr(
-        SystemProxy, "_write", staticmethod(lambda changes: values.update(changes))
-    )
+    monkeypatch.setattr(SystemProxy, "_read", staticmethod(lambda: copy.deepcopy(values)))
+    monkeypatch.setattr(SystemProxy, "_write", staticmethod(lambda changes: values.update(changes)))
     proxy = SystemProxy(tmp_path / "recovery.json")
     proxy.enable(8080)
     proxy.enable(9090)
@@ -138,10 +129,7 @@ def test_headers_only_request_rule_can_be_saved(qapp, tmp_path):
     r.update(action="request_patch", status=0, preserve_body=True)
     dialog = RuleDialog(s, r)
     dialog.save()
-    assert (
-        dialog.result_rule["preserve_body"]
-        and dialog.result_rule["action"] == "request_patch"
-    )
+    assert dialog.result_rule["preserve_body"] and dialog.result_rule["action"] == "request_patch"
 
 
 def test_edit_patch_recomputes_from_base(qapp, tmp_path):
@@ -159,9 +147,10 @@ def test_edit_patch_recomputes_from_base(qapp, tmp_path):
     dialog = RuleDialog(s, r)
     dialog.body.setPlainText('{"balance":30}')
     dialog.save()
-    assert apply_patch(
-        {"balance": 10, "keep": True}, dialog.result_rule["body_patch"]
-    ) == {"balance": 30, "keep": True}
+    assert apply_patch({"balance": 10, "keep": True}, dialog.result_rule["body_patch"]) == {
+        "balance": 30,
+        "keep": True,
+    }
 
 
 def test_switch_request_to_local_has_valid_status(qapp, tmp_path):
@@ -180,9 +169,7 @@ def test_small_window_and_consistent_style(window, qapp):
     qapp.processEvents()
     assert window.width() <= 1024
     assert qapp.font().family() == "Noto Sans"
-    assert (
-        "fusion" in qapp.style().objectName().lower() or qapp.style().objectName() == ""
-    )
+    assert "fusion" in qapp.style().objectName().lower() or qapp.style().objectName() == ""
 
 
 def test_dirty_selection_is_preserved(window, qapp, monkeypatch):
@@ -197,14 +184,10 @@ def test_dirty_selection_is_preserved(window, qapp, monkeypatch):
     page.res_body.setPlainText('{"balance":99}')
     assert page._dirty
     selected = page.selected_id
-    monkeypatch.setattr(
-        QMessageBox, "question", lambda *a: QMessageBox.StandardButton.No
-    )
+    monkeypatch.setattr(QMessageBox, "question", lambda *a: QMessageBox.StandardButton.No)
     page.table.selectRow(1)
     qapp.processEvents()
-    assert (
-        page.selected_id == selected and page.res_body.toPlainText() == '{"balance":99}'
-    )
+    assert page.selected_id == selected and page.res_body.toPlainText() == '{"balance":99}'
 
 
 def test_truncated_body_guard(window, monkeypatch):
@@ -235,9 +218,7 @@ def test_har_sanitized_roundtrip(tmp_path):
     other = Store(tmp_path / "b")
     assert import_har(other, path) == 1
     assert (
-        json.loads(base64.b64decode(other.documents()[0]["request"]["body_b64"]))[
-            "token"
-        ]
+        json.loads(base64.b64decode(other.documents()[0]["request"]["body_b64"]))["token"]
         == "<redacted>"
     )
 
@@ -259,9 +240,7 @@ def test_openapi_disabled_regex():
             "/user/{id}": {
                 "get": {
                     "responses": {
-                        "200": {
-                            "content": {"application/json": {"example": {"ok": True}}}
-                        }
+                        "200": {"content": {"application/json": {"example": {"ok": True}}}}
                     }
                 }
             }
@@ -279,9 +258,7 @@ def test_pending_and_original_request(tmp_path, monkeypatch):
     monkeypatch.setenv("SNIFFER_WORKSPACE", str(tmp_path))
     addon = DesktopAddon()
     captured = []
-    monkeypatch.setattr(
-        addon.capture_writer, "submit", lambda d: captured.append(d) or True
-    )
+    monkeypatch.setattr(addon.capture_writer, "submit", lambda d: captured.append(d) or True)
     monkeypatch.setattr(addon, "reload_rules", lambda: None)
     r = default_rule()
     r.update(
@@ -297,16 +274,12 @@ def test_pending_and_original_request(tmp_path, monkeypatch):
     asyncio.run(addon.request(flow))
     assert captured[0]["pending"]
     assert (
-        base64.b64decode(flow.metadata["desktop_request_original"]["body_b64"])
-        == b'{"old":true}'
+        base64.b64decode(flow.metadata["desktop_request_original"]["body_b64"]) == b'{"old":true}'
     )
     assert flow.request.content == b'{"edited":true}'
     flow.response = http.Response.make(200, b"{}")
     asyncio.run(addon.response(flow))
-    assert (
-        not captured[-1]["pending"]
-        and captured[-1]["applied_rules"][0]["id"] == r["id"]
-    )
+    assert not captured[-1]["pending"] and captured[-1]["applied_rules"][0]["id"] == r["id"]
 
 
 def test_restart_kill_is_cancelled(qapp, tmp_path):
@@ -404,9 +377,7 @@ def test_sse_frames_and_websocket_messages(tmp_path, monkeypatch):
     monkeypatch.setenv("SNIFFER_WORKSPACE", str(tmp_path))
     addon = DesktopAddon()
     documents = []
-    monkeypatch.setattr(
-        addon.capture_writer, "submit", lambda d: documents.append(d) or True
-    )
+    monkeypatch.setattr(addon.capture_writer, "submit", lambda d: documents.append(d) or True)
     flow = http.HTTPFlow(None, None)
     flow.request = http.Request.make("GET", "http://api.test/events")
     flow.response = http.Response.make(200, b"", {"Content-Type": "text/event-stream"})
@@ -415,11 +386,7 @@ def test_sse_frames_and_websocket_messages(tmp_path, monkeypatch):
     assert flow.response.stream(chunk) == chunk
     assert documents[-1]["messages"][0]["text"] == 'data: {"ok":true}'
     flow.websocket = types.SimpleNamespace(
-        messages=[
-            types.SimpleNamespace(
-                from_client=True, timestamp=time.time(), content=b"hello"
-            )
-        ]
+        messages=[types.SimpleNamespace(from_client=True, timestamp=time.time(), content=b"hello")]
     )
     addon.websocket_message(flow)
     assert documents[-1]["messages"][-1]["direction"] == "client"
@@ -454,3 +421,100 @@ def test_frozen_engine_log_channel(qapp, tmp_path):
     previous = list(logs)
     engine._read_logs()
     assert logs == previous
+
+
+def test_engine_button_shows_each_lifecycle_state(window, monkeypatch):
+    for message, state, label in (
+        ("Engine ishga tushirilmoqda…", "starting", "Starting"),
+        ("Proxy: 127.0.0.1:8080", "running", "Running"),
+        ("Engine to‘xtatilmoqda…", "stopping", "Stopping"),
+        ("Engine to‘xtatilgan", "stopped", "Start"),
+        ("Engine to‘xtadi: 1", "error", "Error"),
+    ):
+        window.set_status(message)
+        assert window.engine_toggle.property("engineState") == state
+        assert label in window.engine_toggle.text()
+    window.set_status("Engine to‘xtatilgan")
+    calls = []
+    monkeypatch.setattr(window, "restart_engine", lambda: calls.append("start"))
+    window.engine_toggle.click()
+    assert calls == ["start"]
+    window.show_engine_error("test failure")
+    window.set_status("Engine to‘xtatilgan")
+    assert window.engine_toggle.property("engineState") == "error"
+
+
+def test_body_click_edits_inline_and_discard_restores(window, qapp):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    page = window.captures_page
+    page.store.save_capture(document(1))
+    page.refresh(force=True)
+    page.table.selectRow(0)
+    page.details.setCurrentIndex(1)
+    window.show()
+    qapp.processEvents()
+    initial = page.res_body.toPlainText()
+    QTest.mouseClick(page.res_body.viewport(), Qt.MouseButton.LeftButton)
+    assert not page.res_body.isReadOnly()
+    page.res_body.selectAll()
+    page.res_body.insertPlainText('{"balance":42}')
+    assert page.res_body.toPlainText() == '{"balance":42}'
+    assert page._dirty and not page.res_save_btn.isHidden()
+    page.discard()
+    assert page.res_body.toPlainText() == initial and not page._dirty
+    page.res_view.setCurrentText("Diff")
+    QTest.mouseClick(page.res_body.viewport(), Qt.MouseButton.LeftButton)
+    assert page.res_body.isReadOnly() and not page._dirty
+
+
+def test_hover_actions_target_row_and_play_resumes_view(window, qapp, monkeypatch):
+    from PySide6.QtTest import QTest
+
+    page = window.captures_page
+    for i in (1, 2):
+        page.store.save_capture(document(i))
+    page.refresh(force=True)
+    page.table.selectRow(0)
+    selected = page.selected_id
+    window.show()
+    qapp.processEvents()
+    page.proxy_ready = True
+    QTest.mouseMove(
+        page.table.viewport(), page.table.visualItemRect(page.table.item(1, 0)).center()
+    )
+    qapp.processEvents()
+    target = page.hover_id
+    assert target != selected and page.row_actions.isVisible()
+    calls = []
+    monkeypatch.setattr(page, "replay", lambda fid=None: calls.append(fid))
+    page.row_replay.click()
+    assert calls == [target] and page.selected_id == selected
+    page.row_pin.click()
+    assert target in page.pinned and page.selected_id == selected
+    page.show_row_actions(1)
+    assert page.row_pin.text() == "Unpin"
+    page.row_pin.click()
+    assert target not in page.pinned
+    page.pause.setChecked(True)
+    page.store.save_capture(document(3))
+    page.refresh()
+    assert page.table.rowCount() == 2
+    page.show_row_actions(0)
+    assert page.row_play.isVisible()
+    page.row_play.click()
+    assert not page.pause.isChecked() and page.table.rowCount() == 3
+
+
+def test_direct_header_edit_marks_draft(window):
+    page = window.captures_page
+    page.store.save_capture(document(1))
+    page.refresh(force=True)
+    page.table.selectRow(0)
+    page.req_url.setText("https://api.test/edited")
+    assert page._dirty and not page.req_save_btn.isHidden()
+    # A draft in a hidden tab must still survive edits in the other tab.
+    page.details.setCurrentIndex(1)
+    page.check_res_changes()
+    assert page._dirty
