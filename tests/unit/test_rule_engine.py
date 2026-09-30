@@ -21,49 +21,56 @@ def request(
 
 def test_exact_match():
     rule = default_rule()
-    rule.update({
-        "host": "api.example.com",
-        "path": "/v1/profile",
-    })
+    rule.update(
+        {
+            "host": "api.example.com",
+            "path": "/v1/profile",
+        }
+    )
 
     engine = RuleEngine()
     engine.replace_rules([rule])
 
     assert engine.select(request(), {"local"})["id"] == rule["id"]
 
-    assert engine.select(
-        request(url="https://api.example.com/other"),
-        {"local"},
-    ) is None
+    assert (
+        engine.select(
+            request(url="https://api.example.com/other"),
+            {"local"},
+        )
+        is None
+    )
 
 
 def test_conditions():
     rule = default_rule()
-    rule.update({
-        "method": "POST",
-        "host": "api.example.com",
-        "path": "/v1/profile",
-        "conditions": [
-            {
-                "source": "query",
-                "key": "mode",
-                "op": "equals",
-                "value": "test",
-            },
-            {
-                "source": "header",
-                "key": "x-client",
-                "op": "equals",
-                "value": "desktop",
-            },
-            {
-                "source": "json",
-                "key": "user.id",
-                "op": "equals",
-                "value": "7",
-            },
-        ],
-    })
+    rule.update(
+        {
+            "method": "POST",
+            "host": "api.example.com",
+            "path": "/v1/profile",
+            "conditions": [
+                {
+                    "source": "query",
+                    "key": "mode",
+                    "op": "equals",
+                    "value": "test",
+                },
+                {
+                    "source": "header",
+                    "key": "x-client",
+                    "op": "equals",
+                    "value": "desktop",
+                },
+                {
+                    "source": "json",
+                    "key": "user.id",
+                    "op": "equals",
+                    "value": "7",
+                },
+            ],
+        }
+    )
 
     engine = RuleEngine()
     engine.replace_rules([rule])
@@ -83,20 +90,24 @@ def test_conditions():
 
 def test_scenario_sequence():
     first = default_rule()
-    first.update({
-        "path": "/",
-        "scenario": "demo",
-        "state": "Started",
-        "next_state": "Second",
-    })
+    first.update(
+        {
+            "path": "/",
+            "scenario": "demo",
+            "state": "Started",
+            "next_state": "Second",
+        }
+    )
 
     second = default_rule()
-    second.update({
-        "path": "/",
-        "scenario": "demo",
-        "state": "Second",
-        "next_state": "Started",
-    })
+    second.update(
+        {
+            "path": "/",
+            "scenario": "demo",
+            "state": "Second",
+            "next_state": "Started",
+        }
+    )
 
     engine = RuleEngine()
     engine.replace_rules([first, second])
@@ -110,10 +121,12 @@ def test_scenario_sequence():
 
 def test_max_hits():
     rule = default_rule()
-    rule.update({
-        "path": "/",
-        "max_hits": 1,
-    })
+    rule.update(
+        {
+            "path": "/",
+            "max_hits": 1,
+        }
+    )
 
     engine = RuleEngine()
     engine.replace_rules([rule])
@@ -126,26 +139,33 @@ def test_max_hits():
 
 def test_disabled_rule():
     rule = default_rule()
-    rule.update({
-        "path": "/",
-        "enabled": False,
-    })
+    rule.update(
+        {
+            "path": "/",
+            "enabled": False,
+        }
+    )
 
     engine = RuleEngine()
     engine.replace_rules([rule])
 
-    assert engine.select(
-        request(url="https://example.com/"),
-        {"local"},
-    ) is None
+    assert (
+        engine.select(
+            request(url="https://example.com/"),
+            {"local"},
+        )
+        is None
+    )
 
 
 def test_invalid_regex():
     rule = default_rule()
-    rule.update({
-        "match": "regex",
-        "path": "[",
-    })
+    rule.update(
+        {
+            "match": "regex",
+            "path": "[",
+        }
+    )
 
     with pytest.raises(ValueError):
         validate_rules([rule])
@@ -153,10 +173,12 @@ def test_invalid_regex():
 
 def test_request_patch_rule_is_valid():
     rule = default_rule()
-    rule.update({
-        "action": "request_patch",
-        "status": 0,
-        "preserve_body": True,
-    })
+    rule.update(
+        {
+            "action": "request_patch",
+            "status": 0,
+            "preserve_body": True,
+        }
+    )
 
     validate_rules([rule])

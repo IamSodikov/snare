@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "snare"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Cross-platform desktop HTTP/HTTPS sniffer and API mock debugger"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -30,6 +30,8 @@ classifiers = [
 dependencies = [
     "PySide6>=6.8,<7",
     "mitmproxy>=12,<13",
+    "packaging>=24",
+    "qrcode>=8,<9",
 ]
 
 [project.optional-dependencies]
@@ -55,3 +57,9 @@ pythonpath = ["src"]
 [tool.ruff]
 target-version = "py312"
 line-length = 100
+
+[tool.setuptools.dynamic]
+version = {attr = "desktop_sniffer.__version__"}
+
+[project.scripts]
+snare-cli = "desktop_sniffer.cli:main"

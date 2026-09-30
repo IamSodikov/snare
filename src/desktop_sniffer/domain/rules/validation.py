@@ -95,11 +95,12 @@ def validate_rules(rules):
             if type(value) is not int or not 0 <= value <= maximum:
                 raise ValueError(f"Noto‘g‘ri {field}")
 
+        validate_patch(rule.get("body_patch"))
+        if rule.get("fault", "") not in ("", "disconnect"):
+            raise ValueError("Noto‘g‘ri fault")
         fixture = rule.get("fixture")
 
-        if fixture is not None and (
-            not isinstance(fixture, str) or not fixture
-        ):
+        if fixture is not None and (not isinstance(fixture, str) or not fixture):
             raise ValueError("Noto‘g‘ri fixture ID")
 
         preserve = rule.get("preserve_body", False)
@@ -172,3 +173,23 @@ def validate_rules(rules):
 
             if condition["op"] == "regex":
                 validate_regex(condition.get("value", ""))
+
+
+def validate_patch(patch):
+    if patch is None:
+        return
+    if isinstance(patch, dict) and patch.get("__snare_patch__") == 2:
+        operations = patch.get("operations")
+        if not isinstance(operations, list):
+            raise ValueError("Patch operations list bo‘lishi kerak")
+        for op in operations:
+            if not isinstance(op, dict) or op.get("op") not in ("set", "remove"):
+                raise ValueError("Noto‘g‘ri patch operation")
+            if not isinstance(op.get("path"), list) or not all(
+                isinstance(k, str) for k in op["path"]
+            ):
+                raise ValueError("Patch path text list bo‘lishi kerak")
+            if op["op"] == "set" and "value" not in op:
+                raise ValueError("Patch value majburiy")
+            if op["op"] == "remove" and not op["path"]:
+                raise ValueError("Root object o‘chirilmaydi")

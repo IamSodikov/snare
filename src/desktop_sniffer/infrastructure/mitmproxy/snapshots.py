@@ -16,13 +16,15 @@ def header_pairs(headers) -> list:
 
 
 def make_headers(pairs):
-    return http.Headers([
-        (
-            name.encode("ascii"),
-            value.encode("latin-1"),
-        )
-        for name, value in pairs
-    ])
+    return http.Headers(
+        [
+            (
+                name.encode("ascii"),
+                value.encode("latin-1"),
+            )
+            for name, value in pairs
+        ]
+    )
 
 
 def response_snapshot(response):
@@ -45,9 +47,7 @@ def response_snapshot(response):
     return {
         "status": response.status_code,
         "headers": header_pairs(headers),
-        "body_b64": base64.b64encode(
-            body[:MAX_CAPTURE_BODY]
-        ).decode("ascii"),
+        "body_b64": base64.b64encode(body[:MAX_CAPTURE_BODY]).decode("ascii"),
         "body_size": len(body),
         "truncated": len(body) > MAX_CAPTURE_BODY,
     }
@@ -67,10 +67,10 @@ def request_snapshot(request):
         headers.pop("transfer-encoding", None)
 
     return {
+        "method": request.method,
+        "url": request.pretty_url,
         "headers": header_pairs(headers),
-        "body_b64": base64.b64encode(
-            body[:MAX_CAPTURE_BODY]
-        ).decode("ascii"),
+        "body_b64": base64.b64encode(body[:MAX_CAPTURE_BODY]).decode("ascii"),
         "body_size": len(body),
         "truncated": len(body) > MAX_CAPTURE_BODY,
     }

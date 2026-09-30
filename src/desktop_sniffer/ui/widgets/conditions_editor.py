@@ -19,12 +19,14 @@ class ConditionsEditor(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
 
         self.table = QTableWidget(0, 4)
-        self.table.setHorizontalHeaderLabels([
-            "Source",
-            "Key / JSON path",
-            "Operator",
-            "Value",
-        ])
+        self.table.setHorizontalHeaderLabels(
+            [
+                "Source",
+                "Key / JSON path",
+                "Operator",
+                "Value",
+            ]
+        )
 
         self.table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Stretch
@@ -42,12 +44,14 @@ class ConditionsEditor(QWidget):
             self.add_condition(condition)
 
     def add_empty(self):
-        self.add_condition({
-            "source": "query",
-            "key": "",
-            "op": "equals",
-            "value": "",
-        })
+        self.add_condition(
+            {
+                "source": "query",
+                "key": "",
+                "op": "equals",
+                "value": "",
+            }
+        )
 
     def add_condition(self, condition):
         row = self.table.rowCount()
@@ -62,13 +66,9 @@ class ConditionsEditor(QWidget):
         operator.setCurrentText(condition["op"])
 
         self.table.setCellWidget(row, 0, source)
-        self.table.setItem(
-            row, 1, text_item(condition["key"])
-        )
+        self.table.setItem(row, 1, text_item(condition["key"]))
         self.table.setCellWidget(row, 2, operator)
-        self.table.setItem(
-            row, 3, text_item(condition.get("value", ""))
-        )
+        self.table.setItem(row, 3, text_item(condition.get("value", "")))
 
     def remove_selected(self):
         row = self.table.currentRow()
@@ -83,11 +83,13 @@ class ConditionsEditor(QWidget):
             key = self.table.item(row, 1)
             value = self.table.item(row, 3)
 
-            conditions.append({
-                "source": self.table.cellWidget(row, 0).currentText(),
-                "key": key.text() if key else "",
-                "op": self.table.cellWidget(row, 2).currentText(),
-                "value": value.text() if value else "",
-            })
+            conditions.append(
+                {
+                    "source": self.table.cellWidget(row, 0).currentText(),
+                    "key": key.text() if key else "",
+                    "op": self.table.cellWidget(row, 2).currentText(),
+                    "value": value.text() if value else "",
+                }
+            )
 
         return conditions

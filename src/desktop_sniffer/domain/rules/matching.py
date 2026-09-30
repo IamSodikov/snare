@@ -43,9 +43,6 @@ def compare(values: list[str], operator: str, expected: str) -> bool:
         return any(expected in value for value in values)
 
     if operator == "regex":
-        return any(
-            re.search(expected, value) is not None
-            for value in values
-        )
+        return any(re.search(expected, value) is not None for value in values)
 
     return False

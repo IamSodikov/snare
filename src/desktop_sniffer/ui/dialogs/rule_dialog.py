@@ -24,8 +24,10 @@ from PySide6.QtWidgets import (
 
 from desktop_sniffer.core.constants import MAX_FIXTURE_SIZE
 from desktop_sniffer.domain.rules.defaults import default_rule
+from desktop_sniffer.domain.rules.patching import deep_diff
 from desktop_sniffer.domain.rules.validation import validate_rules
 from desktop_sniffer.ui.helpers.widgets import button
+from desktop_sniffer.ui.pages.captures_page import HeadersTableWidget
 from desktop_sniffer.ui.widgets.conditions_editor import ConditionsEditor
 
 
@@ -86,7 +88,9 @@ class RuleDialog(QDialog):
         target_row = QHBoxLayout()
         self.method = QComboBox()
         self.method.setEditable(True)
-        self.method.addItems(["*", "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"])
+        self.method.addItems(
+            ["*", "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
+        )
         self.method.setCurrentText(self.rule.get("method", "*"))
         self.method.setFixedWidth(110)
         target_row.addWidget(self.method)
@@ -97,7 +101,9 @@ class RuleDialog(QDialog):
         target_form.addRow("Method va URL:", target_row)
 
         self.host = QLineEdit(self.rule.get("host", ""))
-        self.host.setPlaceholderText("Masalan: api.sayt.uz (bo'sh qoldirilsa: barcha hostlar)")
+        self.host.setPlaceholderText(
+            "Masalan: api.sayt.uz (bo'sh qoldirilsa: barcha hostlar)"
+        )
         target_form.addRow("Host (Domen):", self.host)
 
         # Conditions tushuntirish bilan
@@ -122,11 +128,19 @@ class RuleDialog(QDialog):
         response_form = QFormLayout(response_group)
 
         self.action = QComboBox()
-        self.action.addItem("🎭 Mahalliy javob (Local — Serverga so'rov bormaydi)", "local")
-        self.action.addItem("✏️ Server javobini o'zgartirish (Patch — Faqat belgilangan qismlar)", "patch")
-        self.action.addItem("📤 Serverga ketayotgan so'rovni o'zgartirish (Request Patch)", "request_patch")
-        self.action.addItem("🔄 Server javobini to'liq almashtirish (Replace)", "replace")
-        self.action.setCurrentIndex(self.action.findData(self.rule.get("action", "local")))
+        self.action.addItem(
+            "Mahalliy javob (Local — Serverga so'rov bormaydi)", "local"
+        )
+        self.action.addItem(
+            "Server javobini o'zgartirish (Patch — Faqat belgilangan qismlar)", "patch"
+        )
+        self.action.addItem(
+            "Serverga ketayotgan so'rovni o'zgartirish (Request Patch)", "request_patch"
+        )
+        self.action.addItem("Server javobini to'liq almashtirish (Replace)", "replace")
+        self.action.setCurrentIndex(
+            self.action.findData(self.rule.get("action", "local"))
+        )
         self.action.currentIndexChanged.connect(self.update_action_controls)
         response_form.addRow("Mock Amali:", self.action)
 
@@ -151,11 +165,13 @@ class RuleDialog(QDialog):
         response_form.addRow("Status va Delay:", status_row)
 
         self.body_source = QComboBox()
-        self.body_source.addItems([
-            "Matn / JSON formatida",
-            "Fixture fayli (Binary)",
-            "Asl body saqlansin (Preserve body)",
-        ])
+        self.body_source.addItems(
+            [
+                "Matn / JSON formatida",
+                "Fixture fayli (Binary)",
+                "Asl body saqlansin (Preserve body)",
+            ]
+        )
         if self.rule.get("preserve_body"):
             self.body_source.setCurrentIndex(2)
         elif self.fixture_id:
@@ -164,7 +180,7 @@ class RuleDialog(QDialog):
         response_form.addRow("Body manbasi:", self.body_source)
 
         self.body = QPlainTextEdit(self.rule.get("body", ""))
-        self.body.setPlaceholderText("{\n  \"status\": \"success\",\n  \"data\": []\n}")
+        self.body.setPlaceholderText('{\n  "status": "success",\n  "data": []\n}')
         self.body.setMinimumHeight(180)
         response_form.addRow("Javob body'si:", self.body)
 
@@ -177,13 +193,32 @@ class RuleDialog(QDialog):
         f_layout.addWidget(button("Fayl tanlash...", self.choose_fixture))
         response_form.addRow("Biriktirilgan Fixture:", self.fixture_row)
 
+        self.fault = QComboBox()
+        self.fault.addItem("Oddiy javob", "")
+        self.fault.addItem("Ulanishni uzish (Offline / disconnect)", "disconnect")
+        self.fault.setCurrentIndex(self.fault.findData(self.rule.get("fault", "")))
+        response_form.addRow("Network fault:", self.fault)
+        presets = QHBoxLayout()
+        for text, status, delay in [
+            ("500", 500, 0),
+            ("429", 429, 0),
+            ("Slow 2s", 200, 2000),
+        ]:
+            presets.addWidget(
+                button(text, lambda st=status, d=delay: self.apply_preset(st, d))
+            )
+        response_form.addRow("Preset:", presets)
         layout.addWidget(response_group)
 
         # ----------------------------------------------------
         # 4. Kengaytirilgan Sozlamalar (Accordion / Toggle)
         # ----------------------------------------------------
-        self.advanced_toggle = QCheckBox("⚙️ Kengaytirilgan sozlamalar (Headers, Scenarios, Max hits)")
-        self.advanced_toggle.setStyleSheet("font-weight: bold; color: #475569; margin-top: 6px;")
+        self.advanced_toggle = QCheckBox(
+            "Kengaytirilgan sozlamalar (Headers, Scenarios, Max hits)"
+        )
+        self.advanced_toggle.setStyleSheet(
+            "font-weight: bold; color: #475569; margin-top: 6px;"
+        )
         layout.addWidget(self.advanced_toggle)
 
         self.advanced_group = QGroupBox("Kengaytirilgan boshqaruv")
@@ -194,12 +229,20 @@ class RuleDialog(QDialog):
         self.match.setCurrentText(self.rule.get("match", "exact"))
         adv_form.addRow("URL Match turi:", self.match)
 
-        self.headers = QPlainTextEdit(json.dumps(self.rule.get("headers", []), ensure_ascii=False, indent=2))
-        self.headers.setMaximumHeight(90)
-        adv_form.addRow("Qo'shiladigan Headers (JSON):", self.headers)
+        self.headers = HeadersTableWidget("Headers")
+        self.headers.setPlainText(
+            "\n".join(f"{k}: {v}" for k, v in self.rule.get("headers", []))
+        )
+        self.headers.setMinimumHeight(100)
+        self.headers.setMaximumHeight(160)
+
+        adv_form.addRow("Qo‘shiladigan Headers:", self.headers)
+        adv_form.addRow(button("Headers tahrirlash", self.headers.open_editor))
 
         self.remove_headers = QLineEdit(", ".join(self.rule.get("remove_headers", [])))
-        self.remove_headers.setPlaceholderText("Masalan: Content-Security-Policy, ETag (vergul bilan)")
+        self.remove_headers.setPlaceholderText(
+            "Masalan: Content-Security-Policy, ETag (vergul bilan)"
+        )
         adv_form.addRow("O'chiriladigan Headers:", self.remove_headers)
 
         self.scenario = QLineEdit(self.rule.get("scenario", ""))
@@ -223,18 +266,38 @@ class RuleDialog(QDialog):
         self.max_hits.setValue(self.rule.get("max_hits", 0))
         adv_form.addRow("Max hits (Maksimal ishlash soni):", self.max_hits)
 
+        self.rewrite_method = QLineEdit(self.rule.get("rewrite_method", ""))
+        self.rewrite_url = QLineEdit(self.rule.get("rewrite_url", ""))
+        adv_form.addRow("Request method rewrite:", self.rewrite_method)
+        adv_form.addRow("Request URL rewrite:", self.rewrite_url)
+        self.patch_editor = QPlainTextEdit()
+        self.patch_editor.setMaximumHeight(120)
+        self.patch_editor.setPlainText(
+            json.dumps(self.rule.get("body_patch"), ensure_ascii=False, indent=2)
+            if self.rule.get("body_patch") is not None
+            else ""
+        )
+        self.patch_editor.setPlaceholderText(
+            "Ixtiyoriy JSON patch operations; body o‘zgarsa diff qayta hisoblanadi"
+        )
+        adv_form.addRow("JSON patch:", self.patch_editor)
         layout.addWidget(self.advanced_group)
         self.advanced_group.setVisible(False)
         self.advanced_toggle.toggled.connect(self.advanced_group.setVisible)
 
         # Agar qoidada ilg'or parametrlar allaqachon ishlatilgan bo'lsa, avtomatik ochiladi
-        if (self.rule.get("scenario") or self.rule.get("max_hits") or
-            self.rule.get("headers") or self.rule.get("match") != "exact"):
+        if (
+            self.rule.get("scenario")
+            or self.rule.get("max_hits")
+            or self.rule.get("headers")
+            or self.rule.get("match") != "exact"
+        ):
             self.advanced_toggle.setChecked(True)
 
         # Dialog Tugmalari
         buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
+            QDialogButtonBox.StandardButton.Save
+            | QDialogButtonBox.StandardButton.Cancel
         )
         buttons.button(QDialogButtonBox.StandardButton.Save).setText("Saqlash")
         buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("Bekor qilish")
@@ -244,6 +307,12 @@ class RuleDialog(QDialog):
 
         self.update_body_controls()
         self.update_action_controls()
+
+    def apply_preset(self, status, delay):
+        self.action.setCurrentIndex(self.action.findData("local"))
+        self.status.setValue(status)
+        self.delay.setValue(delay)
+        self.fault.setCurrentIndex(0)
 
     def update_body_controls(self, *_):
         source = self.body_source.currentIndex()
@@ -255,9 +324,20 @@ class RuleDialog(QDialog):
         self.status.setEnabled(not is_req_patch)
         if is_req_patch:
             self.status.setValue(0)
+        elif (
+            self.action.currentData() in ("local", "replace")
+            and self.status.value() == 0
+        ):
+            self.status.setValue(200)
+        preserve_allowed = self.action.currentData() in ("patch", "request_patch")
+        self.body_source.model().item(2).setEnabled(preserve_allowed)
+        if not preserve_allowed and self.body_source.currentIndex() == 2:
+            self.body_source.setCurrentIndex(0)
 
     def choose_fixture(self):
-        filename, _ = QFileDialog.getOpenFileName(self, "Biriktiriladigan faylni tanlang")
+        filename, _ = QFileDialog.getOpenFileName(
+            self, "Biriktiriladigan faylni tanlang"
+        )
         if not filename:
             return
         try:
@@ -279,14 +359,32 @@ class RuleDialog(QDialog):
             if source == 1 and not self.fixture_id:
                 raise ValueError("Iltimos, biriktiriladigan faylni tanlang")
 
-            if source == 2 and action != "patch":
-                raise ValueError("Asl tanani saqlash faqat 'O'zgartirish (Patch)' amali uchun amal qiladi")
+            if source == 2 and action not in ("patch", "request_patch"):
+                raise ValueError(
+                    "Asl tanani saqlash faqat 'O'zgartirish (Patch)' amali uchun amal qiladi"
+                )
 
-            headers_str = self.headers.toPlainText().strip() or "[]"
-            try:
-                headers = json.loads(headers_str)
-            except Exception:
-                raise ValueError("Sarlavhalar (Headers) JSON formati noto'g'ri")
+            headers = []
+            for line in self.headers.toPlainText().splitlines():
+                if ":" not in line:
+                    raise ValueError("Header formati: Name: Value")
+                key, value = line.split(":", 1)
+                headers.append([key.strip(), value.strip()])
+            patch_text = self.patch_editor.toPlainText().strip()
+            patch = json.loads(patch_text) if patch_text else None
+            if self.body.toPlainText() != self.rule.get("body", ""):
+                if self.rule.get("body_base") and action in ("patch", "request_patch"):
+                    try:
+                        patch = deep_diff(
+                            json.loads(self.rule["body_base"]),
+                            json.loads(self.body.toPlainText()),
+                        )
+                    except ValueError:
+                        patch = None
+                else:
+                    patch = None
+            if source != 0 or action not in ("patch", "request_patch"):
+                patch = None
 
             rule = {
                 **self.rule,
@@ -302,9 +400,15 @@ class RuleDialog(QDialog):
                 "delay_ms": self.delay.value(),
                 "headers": headers,
                 "remove_headers": [
-                    v.strip() for v in self.remove_headers.text().split(",") if v.strip()
+                    v.strip()
+                    for v in self.remove_headers.text().split(",")
+                    if v.strip()
                 ],
                 "body": self.body.toPlainText(),
+                "body_patch": patch,
+                "rewrite_method": self.rewrite_method.text().strip().upper(),
+                "rewrite_url": self.rewrite_url.text().strip(),
+                "fault": self.fault.currentData(),
                 "fixture": self.fixture_id if source == 1 else None,
                 "preserve_body": source == 2,
                 "scenario": self.scenario.text().strip(),

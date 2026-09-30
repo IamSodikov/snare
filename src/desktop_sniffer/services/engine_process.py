@@ -35,9 +35,7 @@ class EngineProcess(QObject):
         super().__init__(parent)
 
         self._process = QProcess(self)
-        self._process.setProcessChannelMode(
-            QProcess.ProcessChannelMode.MergedChannels
-        )
+        self._process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
 
         self._process.readyReadStandardOutput.connect(self._read_logs)
         self._process.errorOccurred.connect(self._on_error)
@@ -47,6 +45,12 @@ class EngineProcess(QObject):
         self._poll.setInterval(300)
         self._poll.timeout.connect(self._check_ready)
 
+        self._kill_timer = QTimer(self)
+        self._kill_timer.setSingleShot(True)
+        self._kill_timer.timeout.connect(self._ensure_killed)
+        self._deferred_start_args = None
+        self._addon_ready = False
+        self._readiness_buffer = ""
         self._stopping = False
         self._password = ""
         self._proxy_port = None
@@ -54,11 +58,11 @@ class EngineProcess(QObject):
 
     @staticmethod
     def find_executable():
-        if getattr(sys, 'frozen', False):
+        if getattr(sys, "frozen", False):
             return sys.executable
 
         name = "mitmdump.exe" if sys.platform == "win32" else "mitmdump"
-        local = Path(sys.executable).resolve().parent / name
+        local = Path(sys.executable).absolute().parent / name
 
         if local.exists():
             return str(local)
@@ -70,18 +74,26 @@ class EngineProcess(QObject):
         workspace: Path,
         proxy_port: int,
         listen_host: str = "127.0.0.1",
+        options: dict | None = None,
     ):
         self.status_changed.emit("Engine ishga tushirilmoqda…")
-        
+
         if self._process.state() != QProcess.ProcessState.NotRunning:
             # Store arguments for a deferred start and stop the current one
-            self._deferred_start_args = (workspace, proxy_port, listen_host)
-            self.stop()
+            self._deferred_start_args = (workspace, proxy_port, listen_host, options)
+            self.stop(restarting=True)
             return
 
-        self._start_internal(workspace, proxy_port, listen_host)
+        self._start_internal(workspace, proxy_port, listen_host, options)
 
-    def _start_internal(self, workspace: Path, proxy_port: int, listen_host: str):
+    def _start_internal(
+        self, workspace: Path, proxy_port: int, listen_host: str, options=None
+    ):
+        self._kill_timer.stop()
+        self._addon_ready = False
+        self._readiness_buffer = ""
+        self._stopping = False
+        options = options or {}
         executable = self.find_executable()
 
         if not executable:
@@ -91,7 +103,7 @@ class EngineProcess(QObject):
             )
             return
 
-        if getattr(sys, 'frozen', False):
+        if getattr(sys, "frozen", False):
             addon_entry = (
                 Path(sys._MEIPASS)
                 / "desktop_sniffer"
@@ -102,10 +114,7 @@ class EngineProcess(QObject):
         else:
             package_root = Path(__file__).resolve().parents[1]
             addon_entry = (
-                package_root
-                / "infrastructure"
-                / "mitmproxy"
-                / "addon_entry.py"
+                package_root / "infrastructure" / "mitmproxy" / "addon_entry.py"
             )
 
         if not addon_entry.is_file():
@@ -126,27 +135,38 @@ class EngineProcess(QObject):
         self._process.setProcessEnvironment(environment)
         self._process.setWorkingDirectory(str(workspace))
 
-        self._deadline = (
-            time.monotonic() + ENGINE_STARTUP_TIMEOUT_SECONDS
-        )
+        self._deadline = time.monotonic() + ENGINE_STARTUP_TIMEOUT_SECONDS
 
         self.status_changed.emit("Engine ishga tushirilmoqda…")
 
         args = []
-        if getattr(sys, 'frozen', False):
+        if getattr(sys, "frozen", False):
             args.append("--mitmdump-internal")
 
-        args.extend([
-            "--listen-host", listen_host,
-            "--listen-port", str(proxy_port),
-            "-s", str(addon_entry),
-        ])
+        args.extend(
+            [
+                "--listen-host",
+                listen_host,
+                "--listen-port",
+                str(proxy_port),
+                "-s",
+                str(addon_entry),
+            ]
+        )
 
+        args.extend(["--set", f"confdir={workspace.parent.parent / 'mitmproxy'}"])
+        if options.get("auth"):
+            args.extend(["--proxyauth", f"snare:{self._password}"])
+        for field in ("ignore_hosts", "allow_hosts"):
+            for pattern in options.get(field, []):
+                args.extend(["--set", f"{field}={pattern}"])
         self._process.start(executable, args)
 
         self._poll.start()
 
-    def stop(self, sync=False):
+    def stop(self, sync=False, restarting=False):
+        if not restarting:
+            self._deferred_start_args = None
         self._stopping = True
         self._poll.stop()
 
@@ -158,22 +178,26 @@ class EngineProcess(QObject):
                     self._process.waitForFinished(1500)
             else:
                 # Asynchronous kill fallback
-                QTimer.singleShot(3000, self._ensure_killed)
+                self._kill_timer.start(3000)
         else:
             self._stopping = False
             self.status_changed.emit("Engine to‘xtatilgan")
 
     def _ensure_killed(self):
-        if self._process.state() != QProcess.ProcessState.NotRunning:
+        if self._stopping and self._process.state() != QProcess.ProcessState.NotRunning:
             self._process.kill()
 
     def is_running(self) -> bool:
         return self._process.state() == QProcess.ProcessState.Running
 
     def _read_logs(self):
-        text = bytes(
-            self._process.readAllStandardOutput()
-        ).decode("utf-8", errors="replace")
+        text = bytes(self._process.readAllStandardOutput()).decode(
+            "utf-8", errors="replace"
+        )
+
+        self._readiness_buffer = (self._readiness_buffer + text)[-4096:]
+        if "SNARE_READY" in self._readiness_buffer:
+            self._addon_ready = True
 
         if self._password:
             text = text.replace(self._password, "<redacted>")
@@ -189,6 +213,7 @@ class EngineProcess(QObject):
 
     def _on_finished(self, code, *_):
         self._poll.stop()
+        self._kill_timer.stop()
 
         # Call deferred start if exists
         deferred = getattr(self, "_deferred_start_args", None)
@@ -210,12 +235,13 @@ class EngineProcess(QObject):
     def _check_ready(self):
         if time.monotonic() > self._deadline:
             self.stop()
-            self.failed.emit(
-                "Engine startup timeout. Engine Logs’ni tekshiring."
-            )
+            self.failed.emit("Engine startup timeout. Engine Logs’ni tekshiring.")
             return
 
-        if self._process.state() != QProcess.ProcessState.Running:
+        if (
+            self._process.state() != QProcess.ProcessState.Running
+            or not self._addon_ready
+        ):
             return
 
         try:
@@ -230,6 +256,4 @@ class EngineProcess(QObject):
         self._poll.stop()
 
         self.ready.emit("")
-        self.status_changed.emit(
-            f"Proxy: 127.0.0.1:{self._proxy_port}"
-        )
+        self.status_changed.emit(f"Proxy: 127.0.0.1:{self._proxy_port}")

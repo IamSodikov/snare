@@ -12,6 +12,10 @@ Ushbu loyiha zamonaviy dasturlash yondashuvlaridan foydalangan holda, **Antigrav
 
 ---
 
+## Windows review build
+
+The 1.2.0rc1 review includes a consistent cross-platform UI and reliability fixes. See [review changes and Windows testing](docs/WINDOWS-REVIEW.md).
+
 ## ✨ Asosiy Imkoniyatlar
 
 - 🌐 **Jonli Trafikni Kuzatish (Live Inspection):**
@@ -92,7 +96,7 @@ python -m desktop_sniffer
 
 ## 🔒 Xavfsizlik va Maxfiylik
 
-Ushbu dastur xavfsizlik standartlariga to‘liq javob beradi:
+Maxfiy trafik bilan ishlashda saqlash, redaction va ulashish sozlamalarini tekshiring:
 1. **Shaxsiy kalitlar (Private Keys):** `mitmproxy` generatsiya qilgan ildiz sertifikati kalitlari repozitoriyga kirmasligi uchun `.gitignore` orqali to‘liq himoyalangan.
 2. **Ushlangan trafiklar (Tokens, Parollar, Ma'lumotlar):** Test jarayonida yozib olingan barcha ma'lumotlar loyiha papkasida emas, balki foydalanuvchining shaxsiy tizim papkasida saqlanadi (`%APPDATA%\LocalTools\DesktopSniffer\workspaces\`). Git orqali hech qanday shaxsiy trafik tashqariga chiqib ketmaydi.
 3. **Avtomatik tozalash:** Dastur yopilayotganda barcha jarayonlar xavfsiz to‘xtatiladi va Windows proksi sozlamalari zudlik bilan tiklanadi.
@@ -105,7 +109,7 @@ Ushbu loyiha **[MIT License](LICENSE)** asosida ochiq manbali qilib tarqatiladi.
 
 Qo‘llanilgan asosiy vositalar litsenziyalari:
 * **mitmproxy** — [MIT License](https://github.com/mitmproxy/mitmproxy/blob/main/LICENSE)
-* **PySide6 (Qt)** — [LGPLv3](https://www.gnu.org/licenses/lgpl-3.0.html) (Dinamik import qilingani sababli loyihaning MIT litsenziyasiga to‘liq mos keladi).
+* **PySide6 (Qt)** — [LGPLv3](https://www.gnu.org/licenses/lgpl-3.0.html) (Distributivda LGPLv3 talablariga rioya qilish kerak).
 
 ---
 

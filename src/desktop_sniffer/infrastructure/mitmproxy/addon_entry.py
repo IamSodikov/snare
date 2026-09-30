@@ -6,6 +6,6 @@ package_root = str(Path(__file__).resolve().parents[3])
 if package_root not in sys.path:
     sys.path.insert(0, package_root)
 
-from desktop_sniffer.infrastructure.mitmproxy.addon import DesktopAddon
+from desktop_sniffer.infrastructure.mitmproxy.addon import DesktopAddon  # noqa: E402
 
 addons = [DesktopAddon()]

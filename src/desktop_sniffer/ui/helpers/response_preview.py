@@ -22,19 +22,13 @@ def snapshot_text(snapshot) -> str:
 
     except UnicodeDecodeError:
         body = (
-            f"<binary: {len(raw)} captured bytes>\n\n"
-            f"Hex preview:\n{raw[:512].hex(' ')}"
+            f"<binary: {len(raw)} captured bytes>\n\nHex preview:\n{raw[:512].hex(' ')}"
         )
 
-    headers = "\n".join(
-        f"{name}: {value}"
-        for name, value in snapshot["headers"]
-    )
+    headers = "\n".join(f"{name}: {value}" for name, value in snapshot["headers"])
 
     truncated = (
-        "\n\n[TRUNCATED: body to‘liq saqlanmagan]"
-        if snapshot.get("truncated")
-        else ""
+        "\n\n[TRUNCATED: body to‘liq saqlanmagan]" if snapshot.get("truncated") else ""
     )
 
     return (
