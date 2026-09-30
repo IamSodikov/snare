@@ -1,7 +1,5 @@
 name: Windows review build
 on:
-  push:
-    branches: ['codex/snare-windows-review-*']
   pull_request:
   workflow_dispatch:
 permissions:
@@ -20,6 +18,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Linux Qt runtime
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0
       - name: Dependencies
         run: python -m pip install -e '.[dev]'
       - name: Unit and UI regressions
