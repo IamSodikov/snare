@@ -14,7 +14,7 @@ Ushbu loyiha zamonaviy dasturlash yondashuvlaridan foydalangan holda, **Antigrav
 
 ## Windows review build
 
-The 1.2.0rc1 review includes a consistent cross-platform UI and reliability fixes. See [review changes and Windows testing](docs/WINDOWS-REVIEW.md).
+The 1.2.0rc2 review includes a consistent cross-platform UI and reliability fixes. See [review changes and Windows testing](docs/WINDOWS-REVIEW.md).
 
 ## ✨ Asosiy Imkoniyatlar
 

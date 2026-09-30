@@ -2,7 +2,7 @@
 
 Download the `Snare-Windows-review` artifact from the **Windows review build** workflow. Unzip it, then run `Snare-Windows.exe`. Python is not required. The executable is Windows x64 and portable. This test build is not Authenticode-signed.
 
-Previous 1.2.0rc1 build: [download Windows artifact](https://github.com/IamSodikov/snare/actions/runs/36707738268/artifacts/11092398950). The GitHub artifact contains `Snare-Windows-review.zip`; extract that ZIP too. The artifact expires on October 30, 2026. Source build commit: `1e2ab0be8e1a881ecb535d5ec7058f1d14c9105c`.
+Verified 1.2.0rc2 build: [download Windows artifact](https://github.com/IamSodikov/snare/actions/runs/36715900029/artifacts/11096461333). The GitHub artifact contains `Snare-Windows-review.zip`; extract that ZIP too. The artifact expires on October 30, 2026. Source build commit: `dc1aba0ca2e95980a631fb359229a1a4caa9a7de`.
 
 The artifact contains `SHA256SUMS`, build information and the result of a packaged smoke test. The test starts the actual executable, opens its Qt UI, starts its internal proxy, restarts the proxy, waits beyond the previous kill timer, sends a real local mock request and verifies the stored final capture.
 
@@ -41,6 +41,6 @@ Replay and Pin/Unpin appear on the hovered traffic row and act on that row witho
 
 ## Validation
 
-GitHub Actions run 36707738268 passed on September 30, 2026: Linux, Windows and macOS each passed 44 tests, Ruff E4/E7/E9/F and the real UI/internal-proxy smoke. The native Windows x64 executable also passed its packaged smoke: two proxy starts and a completed persisted local mock after the previous restart timeout. Frozen Windows proxy logs now use an explicit channel instead of unavailable windowed standard streams.
+GitHub Actions run 36715900029 passed on September 30, 2026: Linux, Windows and macOS each passed 48 tests, Ruff E4/E7/E9/F and the real UI/internal-proxy smoke. The native Windows x64 executable also passed its packaged smoke: two proxy starts and a completed persisted local mock after the previous restart timeout. Frozen Windows proxy logs now use an explicit channel instead of unavailable windowed standard streams.
 
 Local pip check passed. The local HTTP/HTTPS suite passed Local/Replace/Patch/Request Patch, gzip, duplicate headers, HEAD/204, fixtures, delay, scenarios and 80/80 concurrent captures. A 1,938,890-byte JSON preview opened in about 80 ms in one offscreen measurement; this is not a cross-machine benchmark. CI uses offscreen Qt; native display scaling and device certificate setup still need user verification.
