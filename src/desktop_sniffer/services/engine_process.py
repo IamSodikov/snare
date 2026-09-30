@@ -51,6 +51,11 @@ class EngineProcess(QObject):
         self._deferred_start_args = None
         self._addon_ready = False
         self._readiness_buffer = ""
+        self._log_path = None
+        self._log_offset = 0
+        self._log_timer = QTimer(self)
+        self._log_timer.setInterval(300)
+        self._log_timer.timeout.connect(self._read_logs)
         self._stopping = False
         self._password = ""
         self._proxy_port = None
@@ -131,6 +136,16 @@ class EngineProcess(QObject):
         environment = QProcessEnvironment.systemEnvironment()
         environment.insert("SNIFFER_WORKSPACE", str(workspace))
         environment.insert("PYTHONUNBUFFERED", "1")
+        self._log_timer.stop()
+        self._log_path = None
+        self._log_offset = 0
+        if getattr(sys, "frozen", False):
+            # Windowed Windows executables have no standard streams, even with
+            # QProcess pipes. Keep the child logs in an explicit shared channel.
+            self._log_path = workspace / "engine.log"
+            self._log_path.write_bytes(b"")
+            environment.insert("SNIFFER_ENGINE_LOG", str(self._log_path))
+            self._log_timer.start()
 
         self._process.setProcessEnvironment(environment)
         self._process.setWorkingDirectory(str(workspace))
@@ -194,6 +209,15 @@ class EngineProcess(QObject):
         text = bytes(self._process.readAllStandardOutput()).decode(
             "utf-8", errors="replace"
         )
+        if self._log_path:
+            try:
+                with self._log_path.open("rb") as stream:
+                    stream.seek(self._log_offset)
+                    data = stream.read()
+                    self._log_offset = stream.tell()
+                text += data.decode("utf-8", errors="replace")
+            except OSError:
+                pass
 
         self._readiness_buffer = (self._readiness_buffer + text)[-4096:]
         if "SNARE_READY" in self._readiness_buffer:
@@ -212,6 +236,8 @@ class EngineProcess(QObject):
             self.failed.emit(self._process.errorString())
 
     def _on_finished(self, code, *_):
+        self._read_logs()
+        self._log_timer.stop()
         self._poll.stop()
         self._kill_timer.stop()
 

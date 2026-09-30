@@ -434,3 +434,23 @@ def test_invalid_rules_startup_recovery(window):
     window.recover_workspace(root.name)
     assert window.store.load_rules()
     assert list(root.glob("rules.invalid-*.json"))
+
+
+def test_frozen_engine_log_channel(qapp, tmp_path):
+    from desktop_sniffer.services.engine_process import EngineProcess
+
+    engine = EngineProcess()
+    engine._log_path = tmp_path / "engine.log"
+    logs = []
+    engine.log_received.connect(logs.append)
+    engine._log_path.write_text("SNARE_", encoding="utf-8")
+    engine._read_logs()
+    assert not engine._addon_ready
+    with engine._log_path.open("a", encoding="utf-8") as stream:
+        stream.write("READY\nproxy request\n")
+    engine._read_logs()
+    assert engine._addon_ready
+    assert "proxy request" in logs[-1]
+    previous = list(logs)
+    engine._read_logs()
+    assert logs == previous
