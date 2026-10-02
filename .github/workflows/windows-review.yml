@@ -1,5 +1,8 @@
 name: Windows review build
 on:
+  push:
+    branches:
+      - codex/snare-windows-review-20260930
   pull_request:
   workflow_dispatch:
 permissions:
@@ -50,9 +53,31 @@ jobs:
       - name: Run packaged smoke test
         shell: pwsh
         run: |
-          $proc = Start-Process -FilePath (Resolve-Path dist/Snare-Windows.exe) -ArgumentList '--smoke-test' -PassThru -Wait
+          Remove-Item smoke-result.json -ErrorAction SilentlyContinue
+          $proc = Start-Process -FilePath (Resolve-Path dist/Snare-Windows.exe) -ArgumentList '--smoke-test' -PassThru
+          if (-not $proc.WaitForExit(90000)) {
+            taskkill /PID $proc.Id /T /F
+            throw 'Packaged smoke did not complete within 90 seconds'
+          }
+          $proc.Refresh()
           if (Test-Path smoke-result.json) { Get-Content smoke-result.json }
           if ($proc.ExitCode -ne 0) { throw "Packaged smoke failed: $($proc.ExitCode)" }
+          if (-not (Test-Path smoke-result.json)) { throw 'Packaged smoke produced no result' }
+      - name: Collect startup diagnostics
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path "$env:LOCALAPPDATA/Snare/logs/startup.log") {
+            Copy-Item "$env:LOCALAPPDATA/Snare/logs/startup.log" startup.log
+            Get-Content startup.log
+          }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Windows-startup-diagnostics
+          path: |
+            startup.log
+            smoke-result.json
       - name: Package
         shell: pwsh
         run: |

@@ -23,6 +23,13 @@ Replay and Pin/Unpin appear on the hovered traffic row and act on that row witho
 
 ## Windows check
 
+If the application fails to open, wait 30 seconds and inspect
+`%LOCALAPPDATA%\Snare\logs\startup.log`. The diagnostic build records startup
+stages, exceptions and a thread traceback if startup stalls. If this file is
+never created, the failure occurs before the Python entry point (for example,
+during one-file extraction). Engine diagnostics remain in the selected
+workspace's existing engine log.
+
 1. Open the program in `Start · Stopped`, click **Start**, and confirm the same button turns green with `Stop · Running`. Amber means starting/stopping or connection changes; red means an error.
 2. Open **Connection / Storage**, enable Windows System Proxy, then send a test HTTP request. For HTTPS trust the CA shown by **Mobile Setup**.
 3. Select traffic, edit response JSON, click **Apply → Mock**, repeat the request, then inspect **Original / Modified / Diff**.
