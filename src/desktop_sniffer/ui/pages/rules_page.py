@@ -1,9 +1,14 @@
 import copy
+import html
+import json
+import time
 import uuid
+from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QCheckBox,
     QDialog,
     QFileDialog,
     QHBoxLayout,
@@ -16,47 +21,18 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from desktop_sniffer.domain.rules.engine import RuleEngine
+from desktop_sniffer.infrastructure.persistence.atomic_json import atomic_json
+from desktop_sniffer.services.openapi_tools import rules_from_openapi
 from desktop_sniffer.ui.dialogs.rule_dialog import RuleDialog
 from desktop_sniffer.ui.helpers.widgets import button, text_item
 
 
-class ToggleSwitch(QWidget):
-    toggled = Signal(bool)
-    
+class ToggleSwitch(QCheckBox):
     def __init__(self, checked=True, parent=None):
-        super().__init__(parent)
-        self._checked = checked
-        self.setFixedSize(44, 24)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-    
-    def isChecked(self):
-        return self._checked
-    
-    def setChecked(self, val):
-        self._checked = val
-        self.update()
-    
-    def mousePressEvent(self, event):
-        self._checked = not self._checked
-        self.update()
-        self.toggled.emit(self._checked)
-    
-    def paintEvent(self, event):
-        from PySide6.QtGui import QColor, QPainter
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        w, h = self.width(), self.height()
-        r = h / 2
-        if self._checked:
-            p.setBrush(QColor("#22c55e"))
-        else:
-            p.setBrush(QColor("#cbd5e1"))
-        p.setPen(Qt.PenStyle.NoPen)
-        p.drawRoundedRect(0, 0, w, h, r, r)
-        p.setBrush(QColor("white"))
-        cx = w - r - 2 if self._checked else r + 2
-        p.drawEllipse(int(cx - r + 3), 3, h - 6, h - 6)
-        p.end()
+        super().__init__("Faol", parent)
+        self.setChecked(checked)
+        self.setAccessibleName("Mock qoidasi faol")
 
 
 class RulesPage(QWidget):
@@ -78,7 +54,9 @@ class RulesPage(QWidget):
         header.addWidget(title)
 
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Qoidalarni qidirish (URL, metod, nom yoki shartlar bo'yicha)...")
+        self.search_input.setPlaceholderText(
+            "Qoidalarni qidirish (URL, metod, nom yoki shartlar bo'yicha)..."
+        )
         self.search_input.textChanged.connect(self.render_table)
         header.addWidget(self.search_input)
 
@@ -101,14 +79,22 @@ class RulesPage(QWidget):
 
         header.addWidget(button("Import", self.import_rules))
         header.addWidget(button("Export", self.export_rules))
+        header.addWidget(button("Match test", self.match_test))
+        header.addWidget(button("Reset scenario", self.reset_scenario))
+        header.addWidget(button("OpenAPI", self.openapi_import))
 
         layout.addLayout(header)
+        self.stats_label = QLabel(
+            "Qoidalar yuqoridan pastga tekshiriladi; birinchi mos qoida ishlaydi"
+        )
+        self.stats_label.setWordWrap(True)
+        layout.addWidget(self.stats_label)
 
         # Qoidalar jadvali
         self.table = QTableWidget(0, 4)
-        self.table.setHorizontalHeaderLabels([
-            "Endpoint", "Mock Turi", "Holat", "Amallar"
-        ])
+        self.table.setHorizontalHeaderLabels(
+            ["Endpoint", "Mock Turi", "Holat", "Amallar"]
+        )
 
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
@@ -152,8 +138,14 @@ class RulesPage(QWidget):
             for c in rule.get("conditions", []):
                 conds_text += f" {c.get('key', '')} {c.get('value', '')}".lower()
 
-            if (query in name or query in method or query in host or
-                query in path or query in action or query in conds_text):
+            if (
+                query in name
+                or query in method
+                or query in host
+                or query in path
+                or query in action
+                or query in conds_text
+            ):
                 displayed_rules.append(rule)
 
         self.table.setRowCount(len(displayed_rules))
@@ -172,9 +164,12 @@ class RulesPage(QWidget):
             if rule.get("host"):
                 path_display = f"{rule['host']}{path_display}"
 
-            name_display = rule.get("name", "")
+            name_display = html.escape(rule.get("name", ""))
+            path_display = html.escape(rule.get("method", "*") + " " + path_display)
             if name_display and name_display != "Mock":
-                title_lbl = QLabel(f"<b>{name_display}</b> <span style='color: #64748b;'>({path_display})</span>")
+                title_lbl = QLabel(
+                    f"<b>{name_display}</b> <span style='color: #64748b;'>({path_display})</span>"
+                )
             else:
                 title_lbl = QLabel(f"<b>{path_display}</b>")
             title_lbl.setTextFormat(Qt.TextFormat.RichText)
@@ -185,16 +180,18 @@ class RulesPage(QWidget):
             if conds:
                 cond_tags = []
                 for c in conds:
-                    k = c.get("key", "")
-                    v = c.get("value", "")
+                    k = html.escape(c.get("key", ""))
+                    v = html.escape(c.get("value", ""))
                     src = c.get("source", "")
                     if src == "json":
-                        cond_tags.append(f"body.{k}={v}")
+                        cond_tags.append(f"body.{k} {c.get('op')} {v}")
                     elif src == "query":
-                        cond_tags.append(f"?{k}={v}")
+                        cond_tags.append(f"?{k} {c.get('op')} {v}")
                     else:
-                        cond_tags.append(f"{k}={v}")
-                cond_lbl = QLabel(f"<span style='color: #0369a1; font-size: 11px;'>{', '.join(cond_tags)}</span>")
+                        cond_tags.append(f"{k} {c.get('op')} {v}")
+                cond_lbl = QLabel(
+                    f"<span style='color: #0369a1; font-size: 11px;'>{', '.join(cond_tags)}</span>"
+                )
                 cond_lbl.setTextFormat(Qt.TextFormat.RichText)
                 endpoint_layout.addWidget(cond_lbl)
 
@@ -216,7 +213,7 @@ class RulesPage(QWidget):
             action_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             action_item.setData(Qt.ItemDataRole.UserRole, rid)
             self.table.setItem(row, 1, action_item)
-            
+
             # --- 2. Holat (Toggle Switch) ---
             switch_widget = QWidget()
             switch_layout = QHBoxLayout(switch_widget)
@@ -239,6 +236,12 @@ class RulesPage(QWidget):
                 QPushButton { background-color: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; border-radius: 4px; padding: 4px 8px; }
                 QPushButton:hover { background-color: #e2e8f0; }
             """)
+            actions_layout.addWidget(
+                button("↑", lambda id_=rid: self.move_rule(id_, -1))
+            )
+            actions_layout.addWidget(
+                button("↓", lambda id_=rid: self.move_rule(id_, 1))
+            )
             actions_layout.addWidget(btn_edit)
 
             btn_dup = button("Copy", lambda id_=rid: self.duplicate_by_id(id_))
@@ -343,7 +346,9 @@ class RulesPage(QWidget):
             return
         try:
             self.store.export_bundle(filename)
-            QMessageBox.information(self, "Muvaffaqiyatli", "Qoidalar muvaffaqiyatli eksport qilindi!")
+            QMessageBox.information(
+                self, "Muvaffaqiyatli", "Qoidalar muvaffaqiyatli eksport qilindi!"
+            )
         except Exception as exc:
             QMessageBox.warning(self, "Eksport xatosi", str(exc))
 
@@ -366,6 +371,109 @@ class RulesPage(QWidget):
         try:
             self.store.import_bundle(filename)
             self.refresh()
-            QMessageBox.information(self, "Muvaffaqiyatli", "Qoidalar muvaffaqiyatli yuklandi!")
+            QMessageBox.information(
+                self, "Muvaffaqiyatli", "Qoidalar muvaffaqiyatli yuklandi!"
+            )
         except Exception as exc:
             QMessageBox.warning(self, "Import xatosi", str(exc))
+
+    def move_rule(self, rule_id, delta):
+        index = self.find_index(rule_id)
+        target = index + delta
+        if index >= 0 and 0 <= target < len(self.rules):
+            rules = copy.deepcopy(self.rules)
+            rules[index], rules[target] = rules[target], rules[index]
+            self.commit(rules)
+
+    def reset_scenario(self):
+        atomic_json(self.store.root / "reset.json", {"at": time.time()})
+        self.stats_label.setText("Scenario va counter reset so‘rovi yuborildi")
+
+    def update_stats(self):
+        try:
+            stats = json.loads(
+                (self.store.root / "engine-stats.json").read_text(encoding="utf-8")
+            )
+            names = {r["id"]: r.get("name", r["id"]) for r in self.rules}
+            hits = "; ".join(
+                f"{names.get(key, key)}: {value}"
+                for key, value in stats.get("hits", {}).items()
+            )
+            self.stats_label.setText(
+                f"Hits: {hits or '0'} · Scenarios: {stats.get('states', {})} · Dropped captures: {stats.get('dropped', 0)}"
+            )
+        except (OSError, ValueError):
+            pass
+
+    def match_test(self):
+        from PySide6.QtWidgets import QPlainTextEdit, QVBoxLayout
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Match tester — counter/state o‘zgarmaydi")
+        dialog.resize(720, 520)
+        layout = QVBoxLayout(dialog)
+        editor = QPlainTextEdit(
+            json.dumps(
+                {
+                    "method": "GET",
+                    "url": "https://example.com/api",
+                    "headers": [],
+                    "body": {},
+                },
+                indent=2,
+            )
+        )
+        layout.addWidget(editor)
+        output = QLabel("Request JSON kiriting")
+        output.setWordWrap(True)
+        layout.addWidget(output)
+
+        def check():
+            try:
+                request = json.loads(editor.toPlainText())
+                request["body"] = json.dumps(request.get("body", {})).encode()
+                engine = RuleEngine()
+                engine.replace_rules(self.store.load_rules())
+                try:
+                    stats = json.loads(
+                        (self.store.root / "engine-stats.json").read_text(
+                            encoding="utf-8"
+                        )
+                    )
+                    engine.hits = stats.get("hits", {})
+                    engine.states = stats.get("states", {})
+                except (OSError, ValueError):
+                    pass
+                explanations = engine.explain(request)
+                lines = [
+                    f"{e['priority']}. {e['name']} [{e['action']}]: "
+                    + ("MOS" if e["matched"] else "; ".join(e["reasons"]))
+                    for e in explanations
+                ]
+                output.setText("\n".join(lines) or "Qoidalar yo‘q")
+
+            except Exception as exc:
+                output.setText(str(exc))
+
+        layout.addWidget(button("Tekshirish", check))
+        dialog.exec()
+
+    def openapi_import(self):
+        filename, _ = QFileDialog.getOpenFileName(
+            self, "OpenAPI JSON import", "", "JSON (*.json)"
+        )
+        if not filename:
+            return
+        try:
+            path = Path(filename)
+            if path.stat().st_size > 16 * 1024 * 1024:
+                raise ValueError("OpenAPI hajmi 16 MiB’dan katta")
+            rules = rules_from_openapi(json.loads(path.read_text(encoding="utf-8")))
+            if self.commit(self.rules + rules):
+                QMessageBox.information(
+                    self,
+                    "OpenAPI",
+                    f"{len(rules)} qoida qo‘shildi. Tekshirib keyin faollashtiring.",
+                )
+        except Exception as exc:
+            QMessageBox.warning(self, "OpenAPI", str(exc))

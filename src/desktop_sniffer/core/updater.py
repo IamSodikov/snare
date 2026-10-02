@@ -1,228 +1,163 @@
+"""Verify HTTPS and published SHA-256 manifests; never silently downgrade TLS."""
+
+import hashlib
 import json
-import os
-import shutil
-import subprocess
+import ssl
 import sys
+import tempfile
 import threading
 import urllib.request
-import zipfile
-import ssl
 from pathlib import Path
+from urllib.parse import urlsplit
 
+from packaging.version import InvalidVersion, Version
 from PySide6.QtCore import QObject, QThread, Signal
 
 from desktop_sniffer import __version__
 
 GITHUB_REPO = "IamSodikov/snare"
+ALLOWED_HOSTS = {
+    "github.com",
+    "api.github.com",
+    "release-assets.githubusercontent.com",
+    "objects.githubusercontent.com",
+}
+
 
 def get_ssl_context():
-    try:
-        return ssl.create_default_context()
-    except Exception:
-        return ssl._create_unverified_context()
+    return ssl.create_default_context()
+
+
+def valid_url(url):
+    parsed = urlsplit(url)
+    if (
+        parsed.scheme != "https"
+        or parsed.hostname not in ALLOWED_HOSTS
+        or parsed.username
+    ):
+        raise ValueError("Yangilanish manzili ishonchli GitHub HTTPS manzili emas")
+    return url
+
+
+class SecureRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        valid_url(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def open_url(url, timeout=15):
+    valid_url(url)
+    opener = urllib.request.build_opener(
+        SecureRedirect(), urllib.request.HTTPSHandler(context=get_ssl_context())
+    )
+    return opener.open(
+        urllib.request.Request(url, headers={"User-Agent": "Snare-Updater"}),
+        timeout=timeout,
+    )
+
 
 class Updater(QObject):
-    update_available = Signal(str, str, str)  # version, url, release_notes
+    update_available = Signal(str, str, str, str)
     error = Signal(str)
 
     def check_for_updates(self):
         if not getattr(sys, "frozen", False):
             return
 
-        def _check():
+        def check():
             try:
-                url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
-                req = urllib.request.Request(url, headers={"User-Agent": "Snare-Updater"})
-                
-                # SSL xatolarining oldini olish uchun
-                ctx = get_ssl_context()
-                try:
-                    resp = urllib.request.urlopen(req, timeout=5, context=ctx)
-                except Exception:
-                    ctx = ssl._create_unverified_context()
-                    resp = urllib.request.urlopen(req, timeout=5, context=ctx)
-                
-                with resp as response:
-                    data = json.loads(response.read().decode())
+                with open_url(
+                    f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+                ) as response:
+                    data = json.loads(response.read(2 * 1024 * 1024))
+                version = data.get("tag_name", "")
+                if data.get("prerelease") or Version(version.lstrip("v")) <= Version(
+                    __version__.lstrip("v")
+                ):
+                    return
+                target = {
+                    "win32": "Snare-Windows.exe",
+                    "darwin": "Snare-MacOS.zip",
+                }.get(sys.platform, "Snare-Linux")
+                assets = {
+                    a["name"]: a["browser_download_url"] for a in data.get("assets", [])
+                }
+                if target not in assets or "SHA256SUMS" not in assets:
+                    self.error.emit(
+                        "Release’da tekshiruv manifesti yo‘q; avtomatik yuklash bajarilmadi"
+                    )
+                    return
+                with open_url(assets["SHA256SUMS"]) as response:
+                    manifest = response.read(65536).decode("ascii")
+                hashes = {
+                    line.split()[-1].lstrip("*"): line.split()[0]
+                    for line in manifest.splitlines()
+                    if len(line.split()) == 2
+                }
+                expected = hashes.get(target, "")
+                if len(expected) != 64 or any(
+                    c not in "0123456789abcdefABCDEF" for c in expected
+                ):
+                    raise ValueError("SHA256 manifesti noto‘g‘ri")
+                self.update_available.emit(
+                    version, valid_url(assets[target]), data.get("body", ""), expected
+                )
+            except (OSError, ValueError, InvalidVersion) as exc:
+                self.error.emit(f"Update check: {exc}")
 
-                latest_version = data.get("tag_name", "")
-                if latest_version and latest_version != __version__:
-                    asset_url = None
-                    if sys.platform == "win32":
-                        target = "Snare-Windows.exe"
-                    elif sys.platform == "darwin":
-                        target = "Snare-MacOS.zip"
-                    else:
-                        target = "Snare-Linux"
+        threading.Thread(target=check, daemon=True).start()
 
-                    for asset in data.get("assets", []):
-                        if asset.get("name") == target:
-                            asset_url = asset.get("browser_download_url")
-                            break
-
-                    if asset_url:
-                        self.update_available.emit(
-                            latest_version, asset_url, data.get("body", "")
-                        )
-            except Exception as exc:
-                self.error.emit(f"Update check failed: {exc}")
-
-        threading.Thread(target=_check, daemon=True).start()
 
 class DownloadThread(QThread):
     progress = Signal(int)
-    finished = Signal(str)
+    completed = Signal(str)
     error = Signal(str)
 
-    def __init__(self, url):
-        super().__init__()
-        self.url = url
+    def __init__(self, url, expected_hash, parent=None):
+        super().__init__(parent)
+        self.url = valid_url(url)
+        self.expected_hash = expected_hash.lower()
 
     def run(self):
+        path = None
         try:
-            temp_dir = Path(os.getenv("TEMP", "/tmp"))
-            if sys.platform == "darwin":
-                filename = temp_dir / "Snare-MacOS.zip"
-            elif sys.platform == "win32":
-                filename = temp_dir / "Snare-update.exe"
-            else:
-                filename = temp_dir / "Snare-update"
-
-            req = urllib.request.Request(self.url, headers={"User-Agent": "Snare-Updater"})
-            
-            ctx = get_ssl_context()
-            try:
-                resp = urllib.request.urlopen(req, timeout=10, context=ctx)
-            except Exception:
-                ctx = ssl._create_unverified_context()
-                resp = urllib.request.urlopen(req, timeout=10, context=ctx)
-
-            with resp as response, open(filename, "wb") as f:
-                total_size = int(response.info().get("Content-Length", 0))
+            directory = Path(tempfile.mkdtemp(prefix="snare-update-"))
+            path = directory / (
+                "Snare-Windows.exe" if sys.platform == "win32" else "Snare-update"
+            )
+            digest = hashlib.sha256()
+            with open_url(self.url) as response, path.open("wb") as output:
+                total = int(response.headers.get("Content-Length", 0))
                 downloaded = 0
-                chunk_size = 8192
                 while True:
-                    buffer = response.read(chunk_size)
-                    if not buffer:
+                    if self.isInterruptionRequested():
+                        raise InterruptedError("Yuklash bekor qilindi")
+                    chunk = response.read(65536)
+                    if not chunk:
                         break
-                    f.write(buffer)
-                    downloaded += len(buffer)
-                    if total_size > 0:
-                        self.progress.emit(int(downloaded * 100 / total_size))
-
-            self.finished.emit(str(filename))
-        except Exception as exc:
+                    downloaded += len(chunk)
+                    if downloaded > 512 * 1024 * 1024:
+                        raise ValueError("Update hajmi limitdan katta")
+                    output.write(chunk)
+                    digest.update(chunk)
+                    if total:
+                        self.progress.emit(min(99, downloaded * 100 // total))
+                if total and downloaded != total:
+                    raise ValueError("Yuklash to‘liq tugamadi")
+            if digest.hexdigest() != self.expected_hash:
+                raise ValueError("SHA256 mos kelmadi — fayl rad etildi")
+            self.progress.emit(100)
+            self.completed.emit(str(path))
+        except (OSError, ValueError) as exc:
+            if path:
+                path.unlink(missing_ok=True)
             self.error.emit(str(exc))
 
-def apply_update(downloaded_file: str):
-    if not getattr(sys, "frozen", False):
-        return
 
-    from PySide6.QtWidgets import QApplication
-    current_exe = Path(sys.executable)
-    downloaded = Path(downloaded_file)
+def apply_update(downloaded_file):
+    # Never delete the working install. The verified portable executable can be
+    # tested beside it; replacing a running install needs a signed installer.
+    from PySide6.QtCore import QUrl
+    from PySide6.QtGui import QDesktopServices
 
-    if sys.platform == "win32":
-        bat_path = current_exe.parent / "update_snare.bat"
-        with open(bat_path, "w") as f:
-            f.write(
-                f"""@echo off
-setlocal
-for /f "delims==" %%a in ('set _MEI 2^>NUL') do set "%%a="
-for /f "delims==" %%a in ('set _PYI 2^>NUL') do set "%%a="
-
-:loop
-del "{current_exe}" >NUL 2>&1
-if exist "{current_exe}" (
-    timeout /t 1 /nobreak > NUL
-    goto loop
-)
-
-move /y "{downloaded}" "{current_exe}"
-start "" "{current_exe}"
-del "%~f0"
-"""
-            )
-        env = os.environ.copy()
-        env.pop("_MEIPASS2", None)
-        env.pop("_MEIPASS", None)
-        
-        # PyInstaller prepends _MEIPASS to PATH, which causes LoadLibrary to search the deleted folder.
-        if getattr(sys, 'frozen', False):
-            meipass = sys._MEIPASS
-            paths = env.get("PATH", "").split(os.pathsep)
-            paths = [p for p in paths if p != meipass and p != meipass + os.sep]
-            env["PATH"] = os.pathsep.join(paths)
-
-        subprocess.Popen(
-            str(bat_path), shell=True, creationflags=subprocess.CREATE_NO_WINDOW, env=env
-        )
-        QApplication.quit()
-    elif sys.platform == "darwin":
-        extract_dir = downloaded.parent / "snare_mac_update"
-        extract_dir.mkdir(exist_ok=True)
-        with zipfile.ZipFile(downloaded, "r") as zip_ref:
-            zip_ref.extractall(extract_dir)
-
-        new_app = extract_dir / "Snare.app"
-        current_app = current_exe.parents[2]
-
-        if current_app.suffix == ".app":
-            sh_path = current_app.parent / "update_snare.sh"
-            pid = os.getpid()
-            with open(sh_path, "w") as f:
-                f.write(
-                    f"""#!/bin/bash
-while kill -0 {pid} 2>/dev/null; do
-    sleep 1
-done
-rm -rf "{current_app}"
-mv "{new_app}" "{current_app}"
-open "{current_app}"
-rm -rf "{extract_dir}"
-rm "{downloaded}"
-rm "$0"
-"""
-                )
-            os.chmod(sh_path, 0o755)
-            env = os.environ.copy()
-            env.pop("_MEIPASS2", None)
-            env.pop("_MEIPASS", None)
-            if getattr(sys, 'frozen', False):
-                meipass = sys._MEIPASS
-                for env_var in ["PATH", "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH"]:
-                    if env_var in env:
-                        paths = env[env_var].split(os.pathsep)
-                        paths = [p for p in paths if p != meipass and p != meipass + os.sep]
-                        env[env_var] = os.pathsep.join(paths)
-            subprocess.Popen([str(sh_path)], start_new_session=True, env=env)
-            QApplication.quit()
-    else:
-        sh_path = current_exe.parent / "update_snare.sh"
-        pid = os.getpid()
-        with open(sh_path, "w") as f:
-            f.write(
-                f"""#!/bin/bash
-while kill -0 {pid} 2>/dev/null; do
-    sleep 1
-done
-rm -f "{current_exe}"
-mv "{downloaded}" "{current_exe}"
-chmod +x "{current_exe}"
-"{current_exe}" &
-rm "$0"
-"""
-            )
-        os.chmod(sh_path, 0o755)
-        env = os.environ.copy()
-        env.pop("_MEIPASS2", None)
-        env.pop("_MEIPASS", None)
-        if getattr(sys, 'frozen', False):
-            meipass = sys._MEIPASS
-            for env_var in ["PATH", "LD_LIBRARY_PATH"]:
-                if env_var in env:
-                    paths = env[env_var].split(os.pathsep)
-                    paths = [p for p in paths if p != meipass and p != meipass + os.sep]
-                    env[env_var] = os.pathsep.join(paths)
-        subprocess.Popen([str(sh_path)], start_new_session=True, env=env)
-        QApplication.quit()
+    QDesktopServices.openUrl(QUrl.fromLocalFile(str(Path(downloaded_file).parent)))

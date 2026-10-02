@@ -61,3 +61,8 @@ htmlcov/
 *.crt
 *.pfx
 .mitmproxy/
+# Build verification outputs
+smoke-result.json
+test-temp/
+pytest-of-root/
+Snare-Windows-review.zip

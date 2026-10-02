@@ -15,6 +15,9 @@ class RuleEngine:
     def replace_rules(self, rules):
         validate_rules(rules)
 
+        previous = {
+            r["id"]: {k: v for k, v in r.items() if k != "_regex"} for r in self.rules
+        }
         self.rules = []
         for r in rules:
             r_copy = dict(r)
@@ -25,8 +28,15 @@ class RuleEngine:
                     pass
             self.rules.append(r_copy)
 
-        self.hits.clear()
-        self.states.clear()
+        self.hits = {
+            r["id"]: self.hits[r["id"]]
+            for r in rules
+            if r["id"] in self.hits and previous.get(r["id"]) == r
+        }
+        scenarios = {r.get("scenario") for r in rules if r.get("scenario")}
+        self.states = {
+            key: value for key, value in self.states.items() if key in scenarios
+        }
 
     def select(self, request: dict, actions: set[str]):
         parsed = urlsplit(request["url"])
@@ -61,10 +71,7 @@ class RuleEngine:
 
             method = rule.get("method", "*")
 
-            if (
-                method != "*"
-                and method.upper() != request["method"].upper()
-            ):
+            if method != "*" and method.upper() != request["method"].upper():
                 continue
 
             host = rule.get("host", "").lower()
@@ -139,3 +146,68 @@ class RuleEngine:
             return rule
 
         return None
+
+    def explain(self, request):
+        """Explain every candidate without reserving hits or changing scenarios."""
+        parsed = urlsplit(request["url"])
+        query = parse_qs(parsed.query, keep_blank_values=True)
+        headers = {}
+        for name, value in request.get("headers", []):
+            headers.setdefault(name.lower(), []).append(value)
+        try:
+            body = json.loads(request.get("body", b""))
+        except (ValueError, UnicodeError, TypeError):
+            body = None
+        results = []
+        for index, rule in enumerate(self.rules):
+            reasons = []
+            if not rule.get("enabled", True):
+                reasons.append("disabled")
+            if rule.get("method", "*") not in ("*", request["method"].upper()):
+                reasons.append("method mos emas")
+            if (
+                rule.get("host")
+                and rule["host"].lower() != (parsed.hostname or "").lower()
+            ):
+                reasons.append("host mos emas")
+            path, target = parsed.path or "/", rule.get("path", "")
+            mode = rule["match"]
+            if (
+                (mode == "exact" and path != target)
+                or (mode == "prefix" and not path.startswith(target))
+                or (mode == "regex" and not re.search(target, path))
+            ):
+                reasons.append("path/" + mode + " mos emas")
+            for condition in rule.get("conditions", []):
+                values = (
+                    query.get(condition["key"], [])
+                    if condition["source"] == "query"
+                    else headers.get(condition["key"].lower(), [])
+                    if condition["source"] == "header"
+                    else json_values(body, condition["key"])
+                )
+                if not compare(values, condition["op"], condition.get("value", "")):
+                    reasons.append(
+                        f"{condition['source']}.{condition['key']} {condition['op']} mos emas"
+                    )
+            if (
+                rule.get("max_hits")
+                and self.hits.get(rule["id"], 0) >= rule["max_hits"]
+            ):
+                reasons.append("max_hits tugagan")
+            scenario = rule.get("scenario")
+            if scenario and self.states.get(scenario, "Started") != (
+                rule.get("state") or "Started"
+            ):
+                reasons.append("scenario state mos emas")
+            results.append(
+                {
+                    "id": rule["id"],
+                    "name": rule.get("name", ""),
+                    "action": rule["action"],
+                    "priority": index + 1,
+                    "matched": not reasons,
+                    "reasons": reasons,
+                }
+            )
+        return results

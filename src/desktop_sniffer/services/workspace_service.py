@@ -35,8 +35,4 @@ class WorkspaceService:
         return store
 
     def names(self) -> list[str]:
-        return sorted(
-            path.name
-            for path in self.root.iterdir()
-            if path.is_dir()
-        )
+        return sorted(path.name for path in self.root.iterdir() if path.is_dir())

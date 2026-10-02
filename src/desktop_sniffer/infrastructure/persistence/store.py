@@ -4,7 +4,7 @@ import json
 import sqlite3
 import time
 import uuid
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 
 from desktop_sniffer.core.constants import (
@@ -54,7 +54,16 @@ class Store:
             except sqlite3.OperationalError:
                 pass
 
-
+        with self.connect() as db:
+            try:
+                db.execute(
+                    "ALTER TABLE captures ADD COLUMN data_size INTEGER NOT NULL DEFAULT 0"
+                )
+                db.execute(
+                    "UPDATE captures SET data_size=length(CAST(document AS BLOB))"
+                )
+            except sqlite3.OperationalError:
+                pass
         if not self.rules_path.exists():
             self.save_rules([])
 
@@ -69,9 +78,7 @@ class Store:
             connection.close()
 
     def load_rules(self) -> list:
-        document = json.loads(
-            self.rules_path.read_text(encoding="utf-8")
-        )
+        document = json.loads(self.rules_path.read_text(encoding="utf-8"))
 
         if not isinstance(document, dict) or document.get("version") != 1:
             raise ValueError("Unsupported rules format")
@@ -82,11 +89,23 @@ class Store:
 
     def save_rules(self, rules):
         validate_rules(rules)
+        if self.rules_path.exists():
+            try:
+                self.load_rules()
+                atomic_json(
+                    self.root / "rules.backup.json",
+                    json.loads(self.rules_path.read_text(encoding="utf-8")),
+                )
+            except (ValueError, OSError):
+                pass
 
-        atomic_json(self.rules_path, {
-            "version": 1,
-            "rules": rules,
-        })
+        atomic_json(
+            self.rules_path,
+            {
+                "version": 1,
+                "rules": rules,
+            },
+        )
 
     def put_fixture(self, body: bytes) -> str:
         if len(body) > MAX_FIXTURE_SIZE:
@@ -114,7 +133,14 @@ class Store:
 
         return bytes(row[0])
 
-    def save_capture(self, document: dict):
+    def save_capture(self, document: dict, connection=None, prune=True):
+        settings = self.settings()
+        if not settings["record"]:
+            return
+        if settings["redact"]:
+            from desktop_sniffer.core.privacy import redact_document
+
+            document = redact_document(document)
         response = document.get("final")
         status = response["status"] if response else None
 
@@ -133,7 +159,9 @@ class Store:
                                 val = body[key]
                                 if isinstance(val, str):
                                     extracted.append(val)
-                                elif isinstance(val, list) and all(isinstance(x, str) for x in val):
+                                elif isinstance(val, list) and all(
+                                    isinstance(x, str) for x in val
+                                ):
                                     extracted.extend(val)
                     elif isinstance(body, list):
                         for item in body:
@@ -146,50 +174,87 @@ class Store:
                 except Exception:
                     pass
 
-        with self.connect() as db:
-            db.execute("""
+        serialized = json.dumps(document, ensure_ascii=False)
+        with (
+            nullcontext(connection) if connection is not None else self.connect()
+        ) as db:
+            db.execute(
+                """
                 INSERT OR REPLACE INTO captures
-                (id, created, method, url, status, mock_action, rpc_method, document)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                document["id"],
-                document.get("created") or time.time(),
-                document["method"],
-                display_url,
-                status,
-                document.get("mock_action"),
-                rpc_method,
-                json.dumps(document, ensure_ascii=False),
-            ))
+                (id, created, method, url, status, mock_action, rpc_method, document, data_size)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    document["id"],
+                    document.get("created") or time.time(),
+                    document["method"],
+                    display_url,
+                    status,
+                    document.get("mock_action"),
+                    rpc_method,
+                    serialized,
+                    len(serialized.encode("utf-8")),
+                ),
+            )
 
-            # We probabilistically or efficiently prune old records
-            db.execute("""
-                DELETE FROM captures
-                WHERE created < (
-                    SELECT created FROM captures
-                    ORDER BY created DESC
-                    LIMIT 1 OFFSET ?
-                )
-            """, (CAPTURE_RETENTION,))
+            if prune:
+                self._prune_captures(db)
+
+    def save_capture_batch(self, documents):
+        with self.connect() as db:
+            for document in documents:
+                self.save_capture(document, connection=db, prune=False)
+            self._prune_captures(db)
+
+    def _prune_captures(self, db):
+        db.execute(
+            """DELETE FROM captures WHERE id NOT IN (
+            SELECT id FROM captures ORDER BY created DESC, id DESC LIMIT ?)
+        """,
+            (CAPTURE_RETENTION,),
+        )
+        settings = self.settings()
+        maximum = settings["max_storage_mb"] * 1024 * 1024
+        total = db.execute(
+            "SELECT coalesce(sum(data_size), 0) FROM captures"
+        ).fetchone()[0]
+        if total > maximum:
+            for row_id, size in db.execute(
+                "SELECT id, data_size FROM captures ORDER BY created, id"
+            ).fetchall():
+                db.execute("DELETE FROM captures WHERE id = ?", (row_id,))
+                total -= size
+                if total <= maximum:
+                    break
+        db.execute(
+            "DELETE FROM captures WHERE created < ?",
+            (time.time() - settings["retention_hours"] * 3600,),
+        )
 
     def list_captures(self, query="", limit=CAPTURE_DISPLAY_LIMIT):
         with self.connect() as db:
             if not query:
-                return db.execute("""
+                return db.execute(
+                    """
                     SELECT id, method, url, status, mock_action, rpc_method
                     FROM captures
                     ORDER BY created DESC
                     LIMIT ?
-                """, (limit,)).fetchall()
+                """,
+                    (limit,),
+                ).fetchall()
             else:
                 like_query = f"%{query}%"
-                return db.execute("""
+                return db.execute(
+                    """
                     SELECT id, method, url, status, mock_action, rpc_method
                     FROM captures
                     WHERE url LIKE ? OR method LIKE ? OR status LIKE ? OR mock_action LIKE ? OR rpc_method LIKE ?
                     ORDER BY created DESC
                     LIMIT ?
-                """, (like_query, like_query, like_query, like_query, like_query, limit)).fetchall()
+                """,
+                    (like_query, like_query, like_query, like_query, like_query, limit),
+                ).fetchall()
 
     def capture(self, flow_id: str):
         with self.connect() as db:
@@ -203,23 +268,18 @@ class Store:
     def clear_captures(self):
         with self.connect() as db:
             db.execute("DELETE FROM captures")
+        self.maintain()
 
     def export_bundle(self, destination):
         rules = self.load_rules()
 
-        fixture_ids = {
-            rule["fixture"]
-            for rule in rules
-            if rule.get("fixture")
-        }
+        fixture_ids = {rule["fixture"] for rule in rules if rule.get("fixture")}
 
         document = {
             "version": 1,
             "rules": rules,
             "fixtures": {
-                fixture_id: base64.b64encode(
-                    self.fixture(fixture_id)
-                ).decode("ascii")
+                fixture_id: base64.b64encode(self.fixture(fixture_id)).decode("ascii")
                 for fixture_id in fixture_ids
             },
         }
@@ -273,10 +333,7 @@ class Store:
             if fixture_id and fixture_id not in fixtures:
                 raise ValueError(f"Missing fixture: {fixture_id}")
 
-        mapping = {
-            old_id: str(uuid.uuid4())
-            for old_id in fixtures
-        }
+        mapping = {old_id: str(uuid.uuid4()) for old_id in fixtures}
 
         with self.connect() as db:
             for old_id, body in fixtures.items():
@@ -292,3 +349,92 @@ class Store:
                 rule["fixture"] = mapping[rule["fixture"]]
 
         self.save_rules(rules)
+
+    def settings(self):
+        defaults = {
+            "record": True,
+            "redact": False,
+            "max_storage_mb": 128,
+            "retention_hours": 24,
+        }
+        try:
+            values = json.loads(
+                (self.root / "settings.json").read_text(encoding="utf-8")
+            )
+            for name in ("record", "redact"):
+                if type(values.get(name)) is bool:
+                    defaults[name] = values[name]
+            for name in ("max_storage_mb", "retention_hours"):
+                value = values.get(name)
+                if type(value) is int and 1 <= value <= 10000:
+                    defaults[name] = value
+        except (OSError, ValueError, AttributeError):
+            pass
+        return defaults
+
+    def save_settings(self, values):
+        atomic_json(self.root / "settings.json", values)
+
+    def statistics(self):
+        with self.connect() as db:
+            count, size = db.execute(
+                "SELECT count(*), coalesce(sum(data_size), 0) FROM captures"
+            ).fetchone()
+        return {"count": count, "bytes": size}
+
+    def maintain(self):
+        ids = {r["fixture"] for r in self.load_rules() if r.get("fixture")}
+        with self.connect() as db:
+            for (fixture_id,) in db.execute("SELECT id FROM fixtures").fetchall():
+                if fixture_id not in ids:
+                    db.execute("DELETE FROM fixtures WHERE id = ?", (fixture_id,))
+        db = sqlite3.connect(self.db_path, timeout=10)
+        try:
+            db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            db.execute("VACUUM")
+        finally:
+            db.close()
+
+    def documents(self, limit=1000):
+        with self.connect() as db:
+            return [
+                json.loads(row[0])
+                for row in db.execute(
+                    "SELECT document FROM captures ORDER BY created DESC LIMIT ?",
+                    (limit,),
+                )
+            ]
+
+    def capture_rows(self, query="", method="", status="", mocked=False, limit=250):
+        clauses, values = [], []
+        if query:
+            clauses.append(
+                "(url LIKE ? OR rpc_method LIKE ? OR method LIKE ? OR mock_action LIKE ?)"
+            )
+            values.extend([f"%{query}%"] * 4)
+        if method:
+            clauses.append("method = ?")
+            values.append(method)
+        if status == "Errors":
+            clauses.append(
+                "(status >= 400 OR json_extract(document, '$.error') IS NOT NULL)"
+            )
+        elif status == "Pending":
+            clauses.append("json_extract(document, '$.pending') = 1")
+        elif status:
+            clauses.append("status >= ? AND status < ?")
+            value = int(status[0]) * 100
+            values.extend([value, value + 100])
+        if mocked:
+            clauses.append("mock_action IS NOT NULL")
+        where = " WHERE " + " AND ".join(clauses) if clauses else ""
+        with self.connect() as db:
+            return db.execute(
+                """SELECT id, created, method, url, status, mock_action,
+                json_extract(document, '$.duration_ms'), json_extract(document, '$.final.body_size'),
+                json_extract(document, '$.pending'), json_extract(document, '$.error')
+                FROM captures"""
+                + where
+                + " ORDER BY created DESC, id DESC LIMIT ?",
+                values + [limit],
+            ).fetchall()

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import time
 
 from mitmproxy import ctx, http
 
@@ -13,6 +14,7 @@ from desktop_sniffer.infrastructure.mitmproxy.snapshots import (
     request_snapshot,
     response_snapshot,
 )
+from desktop_sniffer.infrastructure.persistence.atomic_json import atomic_json
 from desktop_sniffer.infrastructure.persistence.store import Store
 
 
@@ -22,12 +24,42 @@ class DesktopAddon:
         self.engine = RuleEngine()
         self.version = None
         self.capture_writer = CaptureWriter(self.store)
+        self._ticker = None
+        self._reset_version = None
 
     def running(self):
         self.capture_writer.start()
         self.reload_rules()
+        self._ticker = asyncio.create_task(self._publish_stats())
+        ctx.log.info("SNARE_READY")
+
+    async def _publish_stats(self):
+        while True:
+            try:
+                reset = self.store.root / "reset.json"
+                if reset.exists():
+                    version = reset.stat().st_mtime_ns
+                    if version != self._reset_version:
+                        self.engine.hits.clear()
+                        self.engine.states.clear()
+                        self._reset_version = version
+                await asyncio.to_thread(
+                    atomic_json,
+                    self.store.root / "engine-stats.json",
+                    {
+                        "hits": self.engine.hits.copy(),
+                        "states": self.engine.states.copy(),
+                        "dropped": self.capture_writer.dropped,
+                        "updated": time.time(),
+                    },
+                )
+            except (OSError, ValueError) as exc:
+                ctx.log.warn(f"Stats: {exc}")
+            await asyncio.sleep(1)
 
     def done(self):
+        if self._ticker:
+            self._ticker.cancel()
         self.capture_writer.stop()
 
     def reload_rules(self):
@@ -47,7 +79,7 @@ class DesktopAddon:
             self.engine.replace_rules(rules)
 
             ctx.log.info(
-                f"Desktop rules loaded: {len(rules)}; scenarios reset"
+                f"Desktop rules loaded: {len(rules)}; unchanged counters preserved"
             )
 
         except Exception as exc:
@@ -63,6 +95,12 @@ class DesktopAddon:
         }
 
     async def apply(self, flow, rule):
+        if rule.get("fault") == "disconnect":
+            flow.kill()
+            flow.metadata.setdefault("desktop_applied", []).append(
+                {"id": rule["id"], "action": "disconnect"}
+            )
+            return
         patch = rule["action"] == "patch"
         preserve_body = patch and rule.get("preserve_body", False)
 
@@ -74,7 +112,7 @@ class DesktopAddon:
                     self.store.fixture,
                     rule["fixture"],
                 )
-            elif rule.get("body_patch") and patch and flow.response:
+            elif rule.get("body_patch") is not None and patch and flow.response:
                 try:
                     orig_body = flow.response.get_content(strict=False)
                     orig_json = json.loads(orig_body)
@@ -98,10 +136,7 @@ class DesktopAddon:
                 response.headers.pop("content-encoding", None)
                 response.raw_content = body
 
-            replacement_names = {
-                name.lower()
-                for name, _ in rule.get("headers", [])
-            }
+            replacement_names = {name.lower() for name, _ in rule.get("headers", [])}
 
             for name in replacement_names:
                 response.headers.pop(name, None)
@@ -119,10 +154,7 @@ class DesktopAddon:
         for name in rule.get("remove_headers", []):
             response.headers.pop(name, None)
 
-        if (
-            flow.request.method == "HEAD"
-            or response.status_code in (204, 205, 304)
-        ):
+        if flow.request.method == "HEAD" or response.status_code in (204, 205, 304):
             response.raw_content = b""
             response.headers.pop("transfer-encoding", None)
 
@@ -133,9 +165,7 @@ class DesktopAddon:
 
         elif not preserve_body:
             response.headers.pop("transfer-encoding", None)
-            response.headers["content-length"] = str(
-                len(response.raw_content or b"")
-            )
+            response.headers["content-length"] = str(len(response.raw_content or b""))
 
         delay_ms = rule.get("delay_ms", 0)
 
@@ -143,13 +173,14 @@ class DesktopAddon:
             await asyncio.sleep(delay_ms / 1000)
 
         flow.response = response
+        flow.metadata.setdefault("desktop_applied", []).append(
+            {"id": rule["id"], "action": rule["action"], "name": rule.get("name", "")}
+        )
         flow.metadata["desktop_mock_id"] = rule["id"]
         flow.metadata["desktop_mock_action"] = rule["action"]
 
         label = f"Mock: {rule.get('name', rule['id'])}"
-        flow.comment = (
-            f"{flow.comment} | {label}" if flow.comment else label
-        )
+        flow.comment = f"{flow.comment} | {label}" if flow.comment else label
 
     async def apply_request_patch(self, flow, rule):
         preserve_body = rule.get("preserve_body", False)
@@ -166,7 +197,7 @@ class DesktopAddon:
                     self.store.fixture,
                     rule["fixture"],
                 )
-            elif rule.get("body_patch"):
+            elif rule.get("body_patch") is not None:
                 try:
                     orig_body = flow.request.get_content(strict=False)
                     orig_json = json.loads(orig_body)
@@ -180,10 +211,7 @@ class DesktopAddon:
             flow.request.headers.pop("content-encoding", None)
             flow.request.raw_content = body
 
-        replacement_names = {
-            name.lower()
-            for name, _ in rule.get("headers", [])
-        }
+        replacement_names = {name.lower() for name, _ in rule.get("headers", [])}
 
         for name in replacement_names:
             flow.request.headers.pop(name, None)
@@ -205,15 +233,16 @@ class DesktopAddon:
         if delay_ms:
             await asyncio.sleep(delay_ms / 1000)
 
+        flow.metadata.setdefault("desktop_applied", []).append(
+            {"id": rule["id"], "action": rule["action"], "name": rule.get("name", "")}
+        )
         flow.metadata["desktop_mock_id"] = rule["id"]
         flow.metadata["desktop_mock_action"] = rule["action"]
 
         label = f"Request patch: {rule.get('name', rule['id'])}"
-        flow.comment = (
-            f"{flow.comment} | {label}" if flow.comment else label
-        )
+        flow.comment = f"{flow.comment} | {label}" if flow.comment else label
 
-    def capture(self, flow, original):
+    def capture(self, flow, original, pending=False):
         document = {
             "id": flow.id,
             "created": flow.request.timestamp_start,
@@ -221,6 +250,23 @@ class DesktopAddon:
             "url": flow.request.pretty_url,
             "request_headers": header_pairs(flow.request.headers),
             "request": request_snapshot(flow.request),
+            "request_original": flow.metadata.get("desktop_request_original"),
+            "applied_rules": list(flow.metadata.get("desktop_applied", [])),
+            "pending": pending,
+            "duration_ms": round(
+                (
+                    (
+                        time.time()
+                        if pending
+                        else getattr(flow.response, "timestamp_end", None)
+                        or time.time()
+                    )
+                    - flow.request.timestamp_start
+                )
+                * 1000,
+                1,
+            ),
+            "messages": list(flow.metadata.get("desktop_messages", [])),
             "original": original,
             "final": response_snapshot(flow.response),
             "mock_rule_id": flow.metadata.get("desktop_mock_id"),
@@ -231,11 +277,14 @@ class DesktopAddon:
         if not self.capture_writer.submit(document):
             ctx.log.warn(
                 "Native capture skipped: queue full or writer stopped. "
-                "Original mitmweb flow is unaffected."
+                "Live request continues; recording dropped."
             )
 
     async def request(self, flow: http.HTTPFlow):
         self.reload_rules()
+        flow.metadata["desktop_request_original"] = request_snapshot(flow.request)
+        flow.metadata["desktop_applied"] = []
+        self.capture(flow, None, pending=True)
 
         # Replay qilingan flow eski mock marker'larini saqlamasin.
         flow.metadata.pop("desktop_mock_id", None)
@@ -259,13 +308,9 @@ class DesktopAddon:
     async def response(self, flow: http.HTTPFlow):
         self.reload_rules()
 
-        is_local = (
-            flow.metadata.get("desktop_mock_action") == "local"
-        )
+        is_local = flow.metadata.get("desktop_mock_action") == "local"
 
-        original = (
-            None if is_local else response_snapshot(flow.response)
-        )
+        original = None if is_local else response_snapshot(flow.response)
 
         try:
             if not is_local:
@@ -284,3 +329,47 @@ class DesktopAddon:
 
     def error(self, flow: http.HTTPFlow):
         self.capture(flow, None)
+
+    def websocket_message(self, flow):
+        message = flow.websocket.messages[-1]
+        messages = flow.metadata.setdefault("desktop_messages", [])
+        messages.append(
+            {
+                "direction": "client" if message.from_client else "server",
+                "timestamp": message.timestamp,
+                "text": message.content[:65536].decode("utf-8", errors="replace"),
+                "size": len(message.content),
+            }
+        )
+        del messages[:-200]
+        self.capture(flow, None)
+
+    def responseheaders(self, flow):
+        if (
+            "text/event-stream"
+            not in flow.response.headers.get("content-type", "").lower()
+        ):
+            return
+        flow.metadata["desktop_stream_buffer"] = b""
+        messages = flow.metadata.setdefault("desktop_messages", [])
+
+        def stream(chunk):
+            buffer = flow.metadata["desktop_stream_buffer"] + chunk
+            frames = buffer.replace(b"\r\n", b"\n").split(b"\n\n")
+            flow.metadata["desktop_stream_buffer"] = frames.pop()[-65536:]
+            for frame in frames:
+                if frame:
+                    messages.append(
+                        {
+                            "direction": "server",
+                            "timestamp": time.time(),
+                            "text": frame[:65536].decode("utf-8", errors="replace"),
+                            "size": len(frame),
+                        }
+                    )
+            del messages[:-200]
+            if frames:
+                self.capture(flow, None, pending=True)
+            return chunk
+
+        flow.response.stream = stream
